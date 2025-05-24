@@ -1,0 +1,70 @@
+# ---------------------------------------
+# 🧱 Archivos de compilación y temporales
+# ---------------------------------------
+.dart_tool/
+.packages
+.pub/
+.pub-cache/
+build/
+.midea/
+.midea
+.flutter-plugins
+.flutter-plugins-dependencies
+.last_build_id
+
+# ---------------------------------------
+# 🧪 Pruebas generadas automáticamente
+# ---------------------------------------
+test-results/
+coverage/
+
+# ---------------------------------------
+# 💻 IDEs (Android Studio, VSCode, IntelliJ, etc)
+# ---------------------------------------
+*.iml
+*.ipr
+*.iws
+.idea/
+.vscode/
+
+# ---------------------------------------
+# 🧠 Archivos del sistema y logs
+# ---------------------------------------
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.history
+.svn/
+.atom/
+.buildlog/
+
+# ---------------------------------------
+# 📱 Android
+# ---------------------------------------
+android/.gradle/
+android/app/debug/
+android/app/profile/
+android/app/release/
+local.properties
+
+# ---------------------------------------
+# 🍏 iOS
+# ---------------------------------------
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/.generated/
+
+# ---------------------------------------
+# 🔒 Archivos sensibles
+# ---------------------------------------
+*.keystore
+
+# ---------------------------------------
+# 🔄 Obfuscation & simbolización
+# ---------------------------------------
+app.*.map.json
+app.*.symbols
