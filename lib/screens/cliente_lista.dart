@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../db/database_helper.dart';
@@ -14,7 +13,6 @@ class ClienteListaScreen extends StatefulWidget {
   State<ClienteListaScreen> createState() => ClienteListaScreenState();
 }
 
-// Make the state class public by removing the underscore
 class ClienteListaScreenState extends State<ClienteListaScreen> {
   final _db = DatabaseHelper();
   List<Cliente> _clientes = [];
@@ -64,7 +62,7 @@ class ClienteListaScreenState extends State<ClienteListaScreen> {
     final hayConexion = await NetworkUtil.hayConexion();
     if (hayConexion && userId != null && token != null && (plan == 'premium' || plan == 'basico')) {
       await SyncHelper.sincronizar(userId, token);
-      _cargarEstadoSync(); // actualizar UI
+      _cargarEstadoSync();
     }
   }
 
@@ -149,26 +147,20 @@ class ClienteListaScreenState extends State<ClienteListaScreen> {
               _eliminarCliente(cliente);
             },
           ),
-          // Puedes agregar más opciones aquí, por ejemplo:
-          // ListTile(
-          //   leading: Icon(Icons.edit, color: Colors.white),
-          //   title: Text('Editar', style: TextStyle(color: Colors.white)),
-          //   onTap: () {
-          //     Navigator.pop(context);
-          //     // Acción para editar
-          //   },
-          // ),
         ],
       ),
     );
   }
 
-
   @override
   Widget build(BuildContext context) {
-    final clientesFiltrados = _clientes
-        .where((c) => c.nombre.toLowerCase().contains(_busqueda.toLowerCase()))
-        .toList();
+    // Filtrar por nombre o teléfono
+    final filtro = _busqueda.toLowerCase();
+    final clientesFiltrados = _clientes.where((c) {
+      final matchNombre = c.nombre.toLowerCase().contains(filtro);
+      final matchTelefono = c.telefono.toLowerCase().contains(filtro);
+      return matchNombre || matchTelefono;
+    }).toList();
 
     return Scaffold(
       backgroundColor: const Color(0xFF1B1E2F),
@@ -253,7 +245,6 @@ class ClienteListaScreenState extends State<ClienteListaScreen> {
                           ? Text('Tel: ${cliente.telefono}',
                           style: const TextStyle(color: Colors.white54))
                           : null,
-
                       onTap: () {
                         Navigator.push(
                           context,
@@ -268,7 +259,7 @@ class ClienteListaScreenState extends State<ClienteListaScreen> {
                   );
                 },
               ),
-            )
+            ),
           ],
         ),
       ),

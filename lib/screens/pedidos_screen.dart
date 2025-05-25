@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../db/database_helper.dart';
 import '../models/pedido.dart';
 import 'pedido_form_screen.dart';
+import 'pedido_detail_screen.dart';
 
 class PedidosScreen extends StatefulWidget {
   const PedidosScreen({Key? key}) : super(key: key);
@@ -13,7 +14,8 @@ class PedidosScreen extends StatefulWidget {
 
 class _PedidosScreenState extends State<PedidosScreen> {
   final _db = DatabaseHelper();
-  List<Pedido> _todosLosPedidos = [];
+  List<Pedido> _pedidos = [];
+  String _busqueda = '';  // texto de búsqueda
 
   @override
   void initState() {
@@ -22,87 +24,199 @@ class _PedidosScreenState extends State<PedidosScreen> {
   }
 
   Future<void> _cargarPedidos() async {
-    final pedidos = await _db.getPedidos();
-    setState(() => _todosLosPedidos = pedidos);
+    final lista = await _db.getPedidos();
+    setState(() => _pedidos = lista);
   }
 
-  void _eliminarPedido(int id) async {
+  Future<void> _eliminar(int id) async {
     await _db.eliminarPedido(id);
     _cargarPedidos();
   }
 
-  void _marcarComoHecho(Pedido p) async {
-    await _db.updatePedido(p.copyWith(hecho: true));
+  Future<void> _marcarHecho(Pedido p) async {
+    await _db.updatePedido(p.copyWith(hecho: !p.hecho));
     _cargarPedidos();
   }
 
+  Map<String, List<Pedido>> _groupByFecha(List<Pedido> all) {
+    final now = DateTime.now();
+    final estaSemana = now.add(const Duration(days: 7));
+    final proximaSemana = now.add(const Duration(days: 14));
+
+    final sinFecha = <Pedido>[];
+    final vencidosHoy = <Pedido>[];
+    final semana = <Pedido>[];
+    final siguiente = <Pedido>[];
+    final masTarde = <Pedido>[];
+
+    for (var p in all) {
+      final f = p.fechaEntrega;
+      if (f == null) {
+        sinFecha.add(p);
+      } else if (f.isBefore(now.add(const Duration(days: 1)))) {
+        vencidosHoy.add(p);
+      } else if (f.isBefore(estaSemana)) {
+        semana.add(p);
+      } else if (f.isBefore(proximaSemana)) {
+        siguiente.add(p);
+      } else {
+        masTarde.add(p);
+      }
+    }
+
+    return {
+      if (vencidosHoy.isNotEmpty) 'Hoy / Vencidos': vencidosHoy,
+      if (sinFecha.isNotEmpty)    'Sin fecha': sinFecha,
+      if (semana.isNotEmpty)      'Esta semana': semana,
+      if (siguiente.isNotEmpty)   'Próxima semana': siguiente,
+      if (masTarde.isNotEmpty)    'Más tarde': masTarde,
+    };
+  }
+
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Text(
+        title,
+        style: const TextStyle(
+          color: Colors.white70,
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
   Widget _buildCard(Pedido p) {
-    return Card(
-      color: const Color(0xFF252A3D),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      elevation: 8,
-      shadowColor: Colors.black54,
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      child: ListTile(
-        // Eliminamos el 'leading' para que no aparezca el círculo azul
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        title: Text(
-          p.titulo,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w600,
-            fontSize: 16,
-          ),
-        ),
-        subtitle: Text(
-          '${p.cliente} • ${_etiquetaFecha(p.fechaEntrega)}',
-          style: const TextStyle(color: Colors.white70),
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (p.precio != null)
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
+    return InkWell(
+      onTap: () async {
+        final mod = await Navigator.push<Pedido?>(
+          context,
+          MaterialPageRoute(builder: (_) => PedidoDetailScreen(pedido: p)),
+        );
+        if (mod != null) _cargarPedidos();
+      },
+      onLongPress: () => _showOptions(p),
+      child: Card(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        elevation: 4,
+        color: const Color(0xFF252A3D),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Expanded(
+                flex: 3,
                 child: Text(
-                  '\$${p.precio!.toStringAsFixed(2)}',
+                  p.titulo,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w500,
                   ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-            IconButton(
-              icon: const Icon(Icons.check_circle, color: Colors.greenAccent),
-              onPressed: () => _marcarComoHecho(p),
-            ),
-            IconButton(
-              icon: const Icon(Icons.edit, color: Colors.lightBlueAccent),
-              onPressed: () async {
-                final modificado = await Navigator.push<bool>(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => PedidoFormScreen(pedido: p),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: Text(
+                  p.cliente,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 14,
                   ),
-                );
-                if (modificado == true) _cargarPedidos();
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                _labelFecha(p.fechaEntrega),
+                style: const TextStyle(
+                  color: Colors.white54,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: Icon(
+                  p.hecho ? Icons.check_circle : Icons.radio_button_unchecked,
+                  size: 28,
+                  color: p.hecho ? Colors.greenAccent : Colors.white54,
+                ),
+                onPressed: () => _marcarHecho(p),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showOptions(Pedido p) {
+    showModalBottomSheet(
+      backgroundColor: const Color(0xFF1B1E2F),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.edit, color: Colors.lightBlueAccent),
+              title: const Text('Editar', style: TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.pop(ctx);
+                Navigator.push<bool>(
+                  context,
+                  MaterialPageRoute(builder: (_) => PedidoFormScreen(pedido: p)),
+                ).then((ok) {
+                  if (ok == true) _cargarPedidos();
+                });
               },
             ),
-            IconButton(
-              icon: const Icon(Icons.delete, color: Colors.redAccent),
-              onPressed: () => _eliminarPedido(p.id!),
+            ListTile(
+              leading: const Icon(Icons.delete, color: Colors.redAccent),
+              title: const Text('Eliminar', style: TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.pop(ctx);
+                showDialog(
+                  context: context,
+                  builder: (_) => AlertDialog(
+                    backgroundColor: const Color(0xFF252A3D),
+                    title: const Text('Confirmar'),
+                    content: const Text('¿Seguro que quieres eliminar este pedido?'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Cancelar', style: TextStyle(color: Colors.white)),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _eliminar(p.id!);
+                        },
+                        child: const Text('Eliminar', style: TextStyle(color: Colors.red)),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
+            const SizedBox(height: 8),
           ],
         ),
       ),
     );
   }
 
-
-  static String _etiquetaFecha(DateTime? fecha) {
+  String _labelFecha(DateTime? fecha) {
     if (fecha == null) return 'Sin fecha';
-    final hoy = DateTime.now();
-    final diff = fecha.difference(hoy).inDays;
+    final now = DateTime.now();
+    final diff = fecha.difference(now).inDays;
     if (diff < 0) return 'Vencido';
     if (diff == 0) return 'Hoy';
     if (diff == 1) return 'Mañana';
@@ -111,55 +225,108 @@ class _PedidosScreenState extends State<PedidosScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final pendientes = _todosLosPedidos.where((p) => !p.hecho).toList();
+    // Filtrar pedidos por cliente o teléfono
+    final filtro = _busqueda.toLowerCase();
+    final filtrados = _pedidos.where((p) {
+      final matchCliente = p.cliente.toLowerCase().contains(filtro);
+      final matchTelefono = (p.telefono ?? '').toLowerCase().contains(filtro);
+      return matchCliente || matchTelefono;
+    }).toList();
+    final pendientes = filtrados.where((p) => !p.hecho).toList();
+    final secciones = _groupByFecha(pendientes);
 
     return Scaffold(
       backgroundColor: const Color(0xFF1B1E2F),
       appBar: AppBar(
+        title: const Text('Pedidos', style: TextStyle(color: Colors.white)),
         backgroundColor: const Color(0xFF1B1E2F),
         elevation: 0,
-        title: const Text('Pedidos', style: TextStyle(color: Colors.white)),
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
-      body: pendientes.isEmpty
-          ? const Center(
-        child: Text(
-          'No hay pedidos registrados.',
-          style: TextStyle(color: Colors.white70, fontSize: 18),
-        ),
-      )
-          : ListView(
-        padding: const EdgeInsets.only(top: 12, bottom: 24),
-        children: pendientes.map(_buildCard).toList(),
-      ),
-      floatingActionButton: Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFF00BFFF),
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF00BFFF).withOpacity(0.6),
-              offset: const Offset(0, 4),
-              blurRadius: 12,
-              spreadRadius: 2,
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            // Barra de búsqueda
+            TextField(
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                labelText: 'Buscar pedido',
+                labelStyle: const TextStyle(color: Colors.white70),
+                prefixIcon: const Icon(Icons.search, color: Colors.white70),
+                filled: true,
+                fillColor: const Color(0xFF252A3D),
+                enabledBorder: OutlineInputBorder(
+                  borderSide: const BorderSide(color: Colors.white30),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderSide: const BorderSide(color: Color(0xFF0066CC)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              onChanged: (value) => setState(() => _busqueda = value),
             ),
-            BoxShadow(
-              color: Colors.black.withOpacity(0.3),
-              offset: const Offset(0, 2),
-              blurRadius: 6,
+            const SizedBox(height: 16),
+            Expanded(
+              child: secciones.isEmpty
+                  ? const Center(
+                child: Text(
+                  'No hay pedidos registrados.',
+                  style: TextStyle(color: Colors.white70, fontSize: 18),
+                ),
+              )
+                  : ListView.builder(
+                padding: const EdgeInsets.only(bottom: 24),
+                itemCount: secciones.keys.length,
+                itemBuilder: (ctx, i) {
+                  final key = secciones.keys.elementAt(i);
+                  final lista = secciones[key]!;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildSectionHeader(key),
+                      ...lista.map(_buildCard),
+                    ],
+                  );
+                },
+              ),
             ),
           ],
         ),
-        child: FloatingActionButton(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          onPressed: () async {
-            final creado = await Navigator.push<bool>(
-              context,
-              MaterialPageRoute(builder: (_) => const PedidoFormScreen()),
-            );
-            if (creado == true) _cargarPedidos();
-          },
-          child: const Icon(Icons.add, size: 32, color: Colors.white),
+      ),
+      floatingActionButton: GestureDetector(
+        onTap: () {
+          Navigator.push<bool>(
+            context,
+            MaterialPageRoute(builder: (_) => const PedidoFormScreen()),
+          ).then((ok) {
+            if (ok == true) _cargarPedidos();
+          });
+        },
+        child: Container(
+          width: 60,
+          height: 60,
+          decoration: BoxDecoration(
+            color: const Color(0xFF00BFFF),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Color(0xFF00BFFF).withOpacity(0.6),
+                offset: const Offset(0, 4),
+                blurRadius: 12,
+                spreadRadius: 1,
+              ),
+              BoxShadow(
+                color: Colors.black.withOpacity(0.3),
+                offset: const Offset(0, 2),
+                blurRadius: 6,
+              ),
+            ],
+          ),
+          child: const Center(
+            child: Icon(Icons.add, size: 28, color: Colors.white),
+          ),
         ),
       ),
     );

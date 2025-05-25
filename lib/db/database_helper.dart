@@ -10,7 +10,6 @@ class DatabaseHelper {
   static Database? _database;
 
   factory DatabaseHelper() => _instance;
-
   DatabaseHelper._internal();
 
   Future<Database> get database async {
@@ -24,14 +23,15 @@ class DatabaseHelper {
     final path = join(dbPath, 'fiados.db');
     return await openDatabase(
       path,
-      version: 2,
+      version: 3,                  // bumped to 3 to support telefono
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
   }
 
-  Future _onCreate(Database db, int version) async {
+  Future<void> _onCreate(Database db, int version) async {
     await db.execute('''
-      CREATE TABLE IF NOT EXISTS usuarios (
+      CREATE TABLE usuarios (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         nombre TEXT NOT NULL,
         email TEXT NOT NULL UNIQUE,
@@ -40,7 +40,7 @@ class DatabaseHelper {
     ''');
 
     await db.execute('''
-      CREATE TABLE IF NOT EXISTS clientes (
+      CREATE TABLE clientes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         nombre TEXT NOT NULL,
         telefono TEXT
@@ -48,7 +48,7 @@ class DatabaseHelper {
     ''');
 
     await db.execute('''
-      CREATE TABLE IF NOT EXISTS productos (
+      CREATE TABLE productos (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         cliente_id INTEGER NOT NULL,
         nombre TEXT NOT NULL,
@@ -59,7 +59,7 @@ class DatabaseHelper {
     ''');
 
     await db.execute('''
-      CREATE TABLE IF NOT EXISTS movimientos (
+      CREATE TABLE movimientos (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         producto_id INTEGER NOT NULL,
         fecha TEXT NOT NULL,
@@ -71,16 +71,29 @@ class DatabaseHelper {
     ''');
 
     await db.execute('''
-      CREATE TABLE IF NOT EXISTS pedidos (
+      CREATE TABLE pedidos (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        cliente TEXT,
-        titulo TEXT,
-        descripcion TEXT,
-        fecha_entrega TEXT,
+        cliente TEXT NOT NULL,
+        telefono TEXT,
+        titulo TEXT NOT NULL,
+        descripcion TEXT NOT NULL,
+        fechaEntrega TEXT,
         precio REAL,
-        hecho INTEGER DEFAULT 0
+        hecho INTEGER NOT NULL DEFAULT 0
       )
     ''');
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      // migración para fechaEntrega y precio
+      await db.execute('ALTER TABLE pedidos ADD COLUMN fechaEntrega TEXT;');
+      await db.execute('ALTER TABLE pedidos ADD COLUMN precio       REAL;');
+    }
+    if (oldVersion < 3) {
+      // migración para teléfono
+      await db.execute('ALTER TABLE pedidos ADD COLUMN telefono TEXT;');
+    }
   }
 
   // CLIENTES
@@ -92,7 +105,7 @@ class DatabaseHelper {
   Future<List<Cliente>> getClientes() async {
     final db = await database;
     final maps = await db.query('clientes', orderBy: 'nombre ASC');
-    return maps.map((map) => Cliente.fromMap(map)).toList();
+    return maps.map((m) => Cliente.fromMap(m)).toList();
   }
 
   Future<void> eliminarCliente(int id) async {
@@ -115,7 +128,7 @@ class DatabaseHelper {
   Future<List<Producto>> getProductosPorCliente(int clienteId) async {
     final db = await database;
     final maps = await db.query('productos', where: 'cliente_id = ?', whereArgs: [clienteId]);
-    return maps.map((map) => Producto.fromMap(map)).toList();
+    return maps.map((m) => Producto.fromMap(m)).toList();
   }
 
   Future<void> eliminarProducto(int id) async {
@@ -133,7 +146,7 @@ class DatabaseHelper {
   Future<List<Movimiento>> getMovimientosPorProducto(int productoId) async {
     final db = await database;
     final maps = await db.query('movimientos', where: 'producto_id = ?', whereArgs: [productoId]);
-    return maps.map((map) => Movimiento.fromMap(map)).toList();
+    return maps.map((m) => Movimiento.fromMap(m)).toList();
   }
 
   // USUARIOS
@@ -148,7 +161,8 @@ class DatabaseHelper {
 
   Future<Map<String, dynamic>?> loginUsuario(String email, String password) async {
     final db = await database;
-    final result = await db.query('usuarios',
+    final result = await db.query(
+      'usuarios',
       where: 'email = ? AND password = ?',
       whereArgs: [email.trim().toLowerCase(), password.trim()],
     );
@@ -161,16 +175,15 @@ class DatabaseHelper {
     return await db.insert('pedidos', pedido.toMap());
   }
 
-  Future<List<Pedido>> getPedidos() async {
+  Future<List<Pedido>> getPedidos({bool soloPendientes = true}) async {
     final db = await database;
-    // Solo pedidos que NO están hechos
     final maps = await db.query(
-        'pedidos',
-        where: 'hecho = ?',
-        whereArgs: [0],
-        orderBy: 'fecha_entrega ASC'
+      'pedidos',
+      where: soloPendientes ? 'hecho = ?' : null,
+      whereArgs: soloPendientes ? [0] : null,
+      orderBy: 'fechaEntrega ASC',
     );
-    return maps.map((map) => Pedido.fromMap(map)).toList();
+    return maps.map((m) => Pedido.fromMap(m)).toList();
   }
 
   Future<int> updatePedido(Pedido pedido) async {

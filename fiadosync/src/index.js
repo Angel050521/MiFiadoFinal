@@ -9,12 +9,23 @@ export default {
     }
 
     const token = auth.replace('Bearer ', '').trim();
-
     if (!/^[a-zA-Z0-9_-]{4,32}$/.test(token)) {
       return new Response('Invalid token format', { status: 403 });
     }
 
-    // ========== POST /upload ==========
+    // === TESTEO: Ver si D1 está conectada ===
+    if (method === 'GET' && pathname === '/d1-test') {
+      try {
+        const result = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table';").all();
+        return new Response(JSON.stringify(result), {
+          headers: { "Content-Type": "application/json" },
+        });
+      } catch (e) {
+        return new Response(`❌ Error ejecutando consulta: ${e}`, { status: 500 });
+      }
+    }
+
+    // ========== POST /upload (a KV) ==========
     if (method === 'POST' && pathname === '/upload') {
       let body;
       try {

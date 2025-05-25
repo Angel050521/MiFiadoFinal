@@ -1,6 +1,7 @@
 class Pedido {
   final int? id;
   final String cliente;
+  final String? telefono;    // nueva propiedad
   final String titulo;
   final String descripcion;
   final DateTime? fechaEntrega;
@@ -10,6 +11,7 @@ class Pedido {
   Pedido({
     this.id,
     required this.cliente,
+    this.telefono,
     required this.titulo,
     required this.descripcion,
     this.fechaEntrega,
@@ -17,32 +19,40 @@ class Pedido {
     this.hecho = false,
   });
 
-  Map<String, dynamic> toMap() => {
-    'id': id,
-    'cliente': cliente,
-    'titulo': titulo,
-    'descripcion': descripcion,
-    'fecha_entrega': fechaEntrega?.toIso8601String(),
-    'precio': precio,
-    'hecho': hecho ? 1 : 0,
-  };
+  Map<String, dynamic> toMap() {
+    return {
+      'id'           : id,
+      'cliente'      : cliente,
+      'telefono'     : telefono,
+      'titulo'       : titulo,
+      'descripcion'  : descripcion,
+      'fechaEntrega' : fechaEntrega?.toIso8601String(),
+      'precio'       : precio,
+      'hecho'        : hecho ? 1 : 0,
+    };
+  }
 
-  factory Pedido.fromMap(Map<String, dynamic> map) => Pedido(
-    id: map['id'] as int?,
-    cliente: map['cliente'] as String,
-    titulo: map['titulo'] as String,
-    descripcion: map['descripcion'] as String,
-    fechaEntrega: map['fecha_entrega'] != null
-        ? DateTime.parse(map['fecha_entrega'] as String)
-        : null,
-    precio: (map['precio'] as num?)?.toDouble(),
-    hecho: (map['hecho'] as int? ?? 0) == 1,
-  );
+  factory Pedido.fromMap(Map<String, dynamic> map) {
+    return Pedido(
+      id: map['id'] as int?,
+      cliente: map['cliente'] as String,
+      telefono: map['telefono'] as String?,
+      titulo: map['titulo'] as String,
+      descripcion: map['descripcion'] as String,
+      fechaEntrega: map['fechaEntrega'] != null
+          ? DateTime.parse(map['fechaEntrega'] as String)
+          : null,
+      precio: map['precio'] != null
+          ? (map['precio'] as num).toDouble()
+          : null,
+      hecho: (map['hecho'] as int) == 1,
+    );
+  }
 
-  // 🚩 Este método te permite copiar el pedido cambiando solo los campos necesarios
   Pedido copyWith({
     int? id,
     String? cliente,
+    String? telefono,
     String? titulo,
     String? descripcion,
     DateTime? fechaEntrega,
@@ -52,6 +62,7 @@ class Pedido {
     return Pedido(
       id: id ?? this.id,
       cliente: cliente ?? this.cliente,
+      telefono: telefono ?? this.telefono,
       titulo: titulo ?? this.titulo,
       descripcion: descripcion ?? this.descripcion,
       fechaEntrega: fechaEntrega ?? this.fechaEntrega,
