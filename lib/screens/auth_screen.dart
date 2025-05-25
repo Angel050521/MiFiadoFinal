@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../db/database_helper.dart';
 import '../utils/device_util.dart';
+import '../services/nube_service.dart'; // <- Corrección aquí
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -50,7 +51,7 @@ class _AuthScreenState extends State<AuthScreen> {
           final userId = usuario['id'].toString();
           final token = pass;
 
-          // Paso nuevo: validar en la nube
+          // Validar desde la nube si tiene plan
           if (plan == 'nube') {
             final permitido = await NubeService.validarODeseaMigrar(
               userId: userId,
@@ -73,7 +74,6 @@ class _AuthScreenState extends State<AuthScreen> {
             }
           }
 
-          final prefs = await SharedPreferences.getInstance();
           await prefs.setInt('userId', usuario['id'] as int);
           await prefs.setString('plan', plan);
           await prefs.setString('token', token);
@@ -84,8 +84,8 @@ class _AuthScreenState extends State<AuthScreen> {
         } else {
           _showError("Correo o contraseña incorrectos");
         }
-      }
-
+      } else {
+        // Registro
         await _db.insertUsuario(nombre, email, pass);
         final nuevo = await _db.loginUsuario(email, pass);
         if (nuevo != null) {
@@ -186,10 +186,14 @@ class _AuthScreenState extends State<AuthScreen> {
                                   ),
                                 ),
                                 const SizedBox(height: 24),
-                                if (!_isLogin) _buildField(_nombreController, 'Nombre completo'),
+                                if (!_isLogin)
+                                  _buildField(_nombreController, 'Nombre completo'),
                                 const SizedBox(height: 12),
-                                _buildField(_emailController, 'Correo electrónico',
-                                    tipo: TextInputType.emailAddress),
+                                _buildField(
+                                  _emailController,
+                                  'Correo electrónico',
+                                  tipo: TextInputType.emailAddress,
+                                ),
                                 const SizedBox(height: 12),
                                 _buildField(_passwordController, 'Contraseña', obscure: true),
                                 const SizedBox(height: 24),
@@ -219,9 +223,10 @@ class _AuthScreenState extends State<AuthScreen> {
                                       child: Text(
                                         'Entrar',
                                         style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.bold),
+                                          color: Colors.white,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
                                     ),
                                   ),

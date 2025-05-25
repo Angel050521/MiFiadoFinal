@@ -12,7 +12,7 @@ Map<String, dynamic> clienteToMap(Cliente c) {
 Map<String, dynamic> movimientoToMap(Movimiento m) {
   return {
     'id': m.id,
-    'clienteId': m.clienteId,
+    'productoId': m.productoId, //
     'fecha': m.fecha,
     'tipo': m.tipo,
     'monto': m.monto,

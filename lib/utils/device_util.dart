@@ -8,9 +8,7 @@ class DeviceUtil {
 
       if (Platform.isAndroid) {
         final info = await deviceInfo.androidInfo;
-        return info.id?.isNotEmpty == true
-            ? info.id!
-            : (info.androidId ?? 'unknown-android');
+        return info.id ?? 'unknown-android'; // ← CORREGIDO
       } else if (Platform.isIOS) {
         final info = await deviceInfo.iosInfo;
         return info.identifierForVendor ?? 'unknown-ios';

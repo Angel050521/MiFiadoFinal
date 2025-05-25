@@ -3,6 +3,7 @@ import 'package:path/path.dart';
 import '../models/cliente.dart';
 import '../models/movimiento.dart';
 import '../models/producto.dart';
+import '../models/pedido.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
@@ -21,7 +22,6 @@ class DatabaseHelper {
   Future<Database> _initDatabase() async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, 'fiados.db');
-
     return await openDatabase(
       path,
       version: 2,
@@ -31,7 +31,7 @@ class DatabaseHelper {
 
   Future _onCreate(Database db, int version) async {
     await db.execute('''
-      CREATE TABLE usuarios (
+      CREATE TABLE IF NOT EXISTS usuarios (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         nombre TEXT NOT NULL,
         email TEXT NOT NULL UNIQUE,
@@ -40,7 +40,7 @@ class DatabaseHelper {
     ''');
 
     await db.execute('''
-      CREATE TABLE clientes (
+      CREATE TABLE IF NOT EXISTS clientes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         nombre TEXT NOT NULL,
         telefono TEXT
@@ -48,7 +48,7 @@ class DatabaseHelper {
     ''');
 
     await db.execute('''
-      CREATE TABLE productos (
+      CREATE TABLE IF NOT EXISTS productos (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         cliente_id INTEGER NOT NULL,
         nombre TEXT NOT NULL,
@@ -59,7 +59,7 @@ class DatabaseHelper {
     ''');
 
     await db.execute('''
-      CREATE TABLE movimientos (
+      CREATE TABLE IF NOT EXISTS movimientos (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         producto_id INTEGER NOT NULL,
         fecha TEXT NOT NULL,
@@ -67,6 +67,18 @@ class DatabaseHelper {
         monto REAL NOT NULL,
         descripcion TEXT,
         FOREIGN KEY (producto_id) REFERENCES productos(id)
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS pedidos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cliente TEXT,
+        titulo TEXT,
+        descripcion TEXT,
+        fecha_entrega TEXT,
+        precio REAL,
+        hecho INTEGER DEFAULT 0
       )
     ''');
   }
@@ -141,5 +153,38 @@ class DatabaseHelper {
       whereArgs: [email.trim().toLowerCase(), password.trim()],
     );
     return result.isNotEmpty ? result.first : null;
+  }
+
+  // PEDIDOS (CRUD)
+  Future<int> insertPedido(Pedido pedido) async {
+    final db = await database;
+    return await db.insert('pedidos', pedido.toMap());
+  }
+
+  Future<List<Pedido>> getPedidos() async {
+    final db = await database;
+    // Solo pedidos que NO están hechos
+    final maps = await db.query(
+        'pedidos',
+        where: 'hecho = ?',
+        whereArgs: [0],
+        orderBy: 'fecha_entrega ASC'
+    );
+    return maps.map((map) => Pedido.fromMap(map)).toList();
+  }
+
+  Future<int> updatePedido(Pedido pedido) async {
+    final db = await database;
+    return await db.update(
+      'pedidos',
+      pedido.toMap(),
+      where: 'id = ?',
+      whereArgs: [pedido.id],
+    );
+  }
+
+  Future<void> eliminarPedido(int id) async {
+    final db = await database;
+    await db.delete('pedidos', where: 'id = ?', whereArgs: [id]);
   }
 }

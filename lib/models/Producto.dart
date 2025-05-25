@@ -2,14 +2,14 @@ class Producto {
   final int? id;
   final int clienteId;
   final String nombre;
-  final String descripcion;
+  final String? descripcion; // 👈 CAMBIA ESTO
   final String fechaCreacion;
 
   Producto({
     this.id,
     required this.clienteId,
     required this.nombre,
-    required this.descripcion,
+    this.descripcion, // 👈 QUITA required
     required this.fechaCreacion,
   });
 

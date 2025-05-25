@@ -5,6 +5,7 @@ import 'cliente_lista.dart' show ClienteListaScreen, ClienteListaScreenState;
 import 'cliente_form.dart';
 import 'resumen_screen.dart';
 import 'suscripcion_screen.dart';
+import 'pedidos_screen.dart'; // ✅ nueva sección de pedidos
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -14,7 +15,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  // Key to access the ClienteListaScreenState
   final GlobalKey<ClienteListaScreenState> _clienteListaKey = GlobalKey<ClienteListaScreenState>();
   int _currentIndex = 0;
   InterstitialAd? _interstitialAd;
@@ -25,21 +25,20 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _loadInterstitialAd();
     _screens = [
-      _buildHomeContent(),
-      ClienteListaScreen(key: _clienteListaKey),
-      const ResumenScreen(),
-      const SuscripcionScreen(),
+      _buildHomeContent(),                          // 0. Inicio
+      ClienteListaScreen(key: _clienteListaKey),    // 1. Clientes
+      const ResumenScreen(),                        // 2. Resumen
+      const PedidosScreen(),                        // 3. Pedidos
+      const SuscripcionScreen(),                    // 4. Premium
     ];
   }
 
   void _loadInterstitialAd() {
     InterstitialAd.load(
-      adUnitId: 'ca-app-pub-8287127512209971/9247923722', // ID REAL DE ADMOB
+      adUnitId: 'ca-app-pub-8287127512209971/9247923722',
       request: const AdRequest(),
       adLoadCallback: InterstitialAdLoadCallback(
-        onAdLoaded: (ad) {
-          _interstitialAd = ad;
-        },
+        onAdLoaded: (ad) => _interstitialAd = ad,
         onAdFailedToLoad: (error) {
           debugPrint('Error al cargar interstitial: $error');
           _interstitialAd = null;
@@ -84,7 +83,6 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: const Color(0xFF1B1E2F),
         foregroundColor: Colors.white,
         elevation: 0,
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero, side: BorderSide.none),
       ),
       body: _screens[_currentIndex],
       floatingActionButton: _currentIndex == 1
@@ -112,16 +110,8 @@ class _HomeScreenState extends State<HomeScreen> {
               context,
               MaterialPageRoute(builder: (context) => const ClienteFormScreen()),
             );
-            
-            // If a new client was added (result is true), refresh the client list
             if (result == true && _currentIndex == 1) {
-              // Find the ClienteListaScreen in the _screens list and refresh it
-              for (var screen in _screens) {
-                if (screen is ClienteListaScreen && screen.key == _clienteListaKey) {
-                  _clienteListaKey.currentState?.cargarClientes();
-                  break;
-                }
-              }
+              _clienteListaKey.currentState?.cargarClientes();
             }
           },
           backgroundColor: Colors.transparent,
@@ -141,8 +131,55 @@ class _HomeScreenState extends State<HomeScreen> {
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Inicio'),
           BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Clientes'),
           BottomNavigationBarItem(icon: Icon(Icons.bar_chart), label: 'Resumen'),
-          BottomNavigationBarItem(icon: Icon(Icons.workspace_premium), label: 'Hazte Premium'),
+          BottomNavigationBarItem(icon: Icon(Icons.assignment), label: 'Pedidos'),
+          BottomNavigationBarItem(icon: Icon(Icons.workspace_premium), label: 'Premium'),
         ],
+      ),
+    );
+  }
+
+  Widget _buildApoyoButton() {
+    return GestureDetector(
+      onTap: _mostrarAnuncio,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF00BFFF), Color(0xFF0091EA)],
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF00BFFF).withOpacity(0.4),
+              offset: const Offset(0, 4),
+              blurRadius: 12,
+              spreadRadius: 1,
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: const [
+            Icon(Icons.volunteer_activism, color: Colors.white, size: 24),
+            SizedBox(width: 12),
+            Flexible(
+              child: Text(
+                'Apoya la app viendo un anuncio',
+                overflow: TextOverflow.ellipsis,
+                maxLines: 2,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -188,150 +225,106 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildApoyoButton() {
-  return GestureDetector(
-    onTap: _mostrarAnuncio,
-    child: Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF00BFFF), Color(0xFF0091EA)],
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF00BFFF).withOpacity(0.4),
-            offset: const Offset(0, 4),
-            blurRadius: 12,
-            spreadRadius: 1,
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: const [
-          Icon(Icons.volunteer_activism, color: Colors.white, size: 24),
-          SizedBox(width: 12),
-          Flexible(
-            child: Text(
-              'Apoya la app viendo un anuncio',
-              overflow: TextOverflow.ellipsis,
-              maxLines: 2,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
-}
-
-
   Widget _buildHomeContent() {
-  return LayoutBuilder(
-    builder: (context, constraints) {
-      return Stack(
-        children: [
-          // Fondo degradado
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Color(0xFF1B1E2F), Color(0xFF0D0F1A)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Stack(
+          children: [
+            Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF1B1E2F), Color(0xFF0D0F1A)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
               ),
             ),
-          ),
-          // Título fuera de la tarjeta
-          Padding(
-            padding: const EdgeInsets.only(top: 40.0, left: 24.0, right: 24.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Bienvenido a Mi Fiado',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Controla todos tus préstamos y fiados en un solo lugar',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.white.withOpacity(0.8),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Card con scroll
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 140.0, left: 24.0, right: 24.0, bottom: 24.0),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-                  child: Container(
-                    width: constraints.maxWidth > 600 ? 600 : double.infinity,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.white.withOpacity(0.2)),
+            Padding(
+              padding: const EdgeInsets.only(top: 40.0, left: 24.0, right: 24.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Bienvenido a Mi Fiado',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
                     ),
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildFeatureItem(
-                            Icons.people,
-                            'Gestión de Clientes',
-                            'Administra la información de tus clientes y lleva un registro detallado de cada uno.',
-                          ),
-                          const SizedBox(height: 20),
-                          _buildFeatureItem(
-                            Icons.shopping_cart,
-                            'Productos Individuales',
-                            'Agrega y gestiona productos individuales para cada cliente, con precios y descripciones personalizadas.',
-                          ),
-                          const SizedBox(height: 20),
-                          _buildFeatureItem(
-                            Icons.attach_money,
-                            'Control de Pagos',
-                            'Registra abonos, genera recibos y lleva el control de saldos pendientes.',
-                          ),
-                          const SizedBox(height: 20),
-                          _buildFeatureItem(
-                            Icons.picture_as_pdf,
-                            'Exportar a PDF',
-                            'Genera reportes detallados en formato PDF para llevar un control impreso de tus operaciones.',
-                          ),
-                          const SizedBox(height: 30),
-                          _buildApoyoButton(),
-                        ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Controla todos tus préstamos y fiados en un solo lugar',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.white.withOpacity(0.8),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 140.0, left: 24.0, right: 24.0, bottom: 24.0),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+                    child: Container(
+                      width: constraints.maxWidth > 600 ? 600 : double.infinity,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.white.withOpacity(0.2)),
+                      ),
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildFeatureItem(
+                              Icons.people,
+                              'Gestión de Clientes',
+                              'Administra la información de tus clientes y lleva un registro detallado de cada uno.',
+                            ),
+                            const SizedBox(height: 20),
+                            _buildFeatureItem(
+                              Icons.shopping_cart,
+                              'Productos Individuales',
+                              'Agrega y gestiona productos individuales para cada cliente.',
+                            ),
+                            const SizedBox(height: 20),
+                            _buildFeatureItem(
+                              Icons.attach_money,
+                              'Control de Pagos',
+                              'Registra abonos, genera recibos y lleva el control de saldos pendientes.',
+                            ),
+                            const SizedBox(height: 20),
+                            _buildFeatureItem(
+                              Icons.picture_as_pdf,
+                              'Exportar a PDF',
+                              'Genera reportes detallados en formato PDF.',
+                            ),
+                            const SizedBox(height: 20),
+                            // ← Nueva sección de Pedidos
+                            _buildFeatureItem(
+                              Icons.assignment,
+                              'Pedidos',
+                              'Crea, edita, marca como hecho y elimina automáticamente tus pedidos según fecha.',
+                            ),
+                            const SizedBox(height: 30),
+                            _buildApoyoButton(),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
-      );
-    },
-  );
-}
-
+          ],
+        );
+      },
+    );
+  }
 }
