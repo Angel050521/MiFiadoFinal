@@ -44,7 +44,13 @@ class _PedidosScreenState extends State<PedidosScreen> {
   }
 
   Future<void> _marcarHecho(Pedido p) async {
-    await _db.updatePedido(p.copyWith(hecho: !p.hecho));
+    final ahora = DateTime.now();
+    await _db.updatePedido(
+      p.copyWith(
+        hecho: !p.hecho,
+        fechaHecho: !p.hecho ? ahora : null,
+      ),
+    );
     _cargarPedidos();
   }
 
@@ -305,45 +311,115 @@ class _PedidosScreenState extends State<PedidosScreen> {
           ],
         ),
       ),
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          FloatingActionButton.extended(
-            heroTag: 'gasto',
-            backgroundColor: const Color(0xFF0066CC),
-            icon: const Icon(Icons.attach_money),
-            label: const Text('Agregar gasto'),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => GastoFormScreen(
-                    onGuardar: (gasto) async {
-                      await _db.insertGasto(gasto);
-                      _cargarGastos();
-                      setState(() {});
-                    },
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(right: 16, bottom: 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            // Botón Agregar Gasto
+            GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => GastoFormScreen(
+                      onGuardar: (gasto) async {
+                        await _db.insertGasto(gasto);
+                        _cargarGastos();
+                        setState(() {});
+                      },
+                    ),
                   ),
+                );
+              },
+              child: Container(
+                width: 180,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0066CC),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF0066CC).withOpacity(0.6),
+                      offset: const Offset(0, 4),
+                      blurRadius: 12,
+                      spreadRadius: 1,
+                    ),
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.3),
+                      offset: const Offset(0, 2),
+                      blurRadius: 6,
+                    ),
+                  ],
                 ),
-              );
-            },
-          ),
-          const SizedBox(height: 12),
-          FloatingActionButton(
-            heroTag: 'pedido',
-            backgroundColor: const Color(0xFF00BFFF),
-            child: const Icon(Icons.add, size: 32),
-            onPressed: () {
-              Navigator.push<bool>(
-                context,
-                MaterialPageRoute(builder: (_) => const PedidoFormScreen()),
-              ).then((ok) {
-                if (ok == true) _cargarPedidos();
-              });
-            },
-          ),
-        ],
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.attach_money, color: Colors.white),
+                    SizedBox(width: 8),
+                    Text(
+                      'Agregar Gasto',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Botón Agregar Pedido
+            GestureDetector(
+              onTap: () {
+                Navigator.push<bool>(
+                  context,
+                  MaterialPageRoute(builder: (_) => const PedidoFormScreen()),
+                ).then((ok) {
+                  if (ok == true) _cargarPedidos();
+                });
+              },
+              child: Container(
+                width: 180,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00BFFF),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF00BFFF).withOpacity(0.6),
+                      offset: const Offset(0, 4),
+                      blurRadius: 12,
+                      spreadRadius: 1,
+                    ),
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.3),
+                      offset: const Offset(0, 2),
+                      blurRadius: 6,
+                    ),
+                  ],
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.add, color: Colors.white),
+                    SizedBox(width: 8),
+                    Text(
+                      'Agregar Pedido',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

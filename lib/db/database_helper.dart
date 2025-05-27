@@ -110,7 +110,8 @@ class DatabaseHelper {
         descripcion TEXT NOT NULL,
         fechaEntrega TEXT,
         precio REAL,
-        hecho INTEGER NOT NULL DEFAULT 0
+        hecho INTEGER NOT NULL DEFAULT 0,
+        fechaHecho TEXT
       )
     ''');
 
@@ -134,6 +135,12 @@ class DatabaseHelper {
     if (oldVersion < 3) {
       // migración para teléfono
       await db.execute('ALTER TABLE pedidos ADD COLUMN telefono TEXT;');
+    }
+    // Migración para fechaHecho (versión 4)
+    try {
+      await db.execute('ALTER TABLE pedidos ADD COLUMN fechaHecho TEXT;');
+    } catch (e) {
+      // Puede fallar si ya existe, lo ignoramos
     }
     // Si la tabla gastos no existe, crearla
     await db.execute('''

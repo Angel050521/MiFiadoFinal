@@ -1,12 +1,13 @@
 class Pedido {
   final int? id;
   final String cliente;
-  final String? telefono;    // nueva propiedad
+  final String? telefono;
   final String titulo;
   final String descripcion;
   final DateTime? fechaEntrega;
   final double? precio;
   final bool hecho;
+  final DateTime? fechaHecho;
 
   Pedido({
     this.id,
@@ -17,6 +18,7 @@ class Pedido {
     this.fechaEntrega,
     this.precio,
     this.hecho = false,
+    this.fechaHecho,
   });
 
   Map<String, dynamic> toMap() {
@@ -29,6 +31,7 @@ class Pedido {
       'fechaEntrega' : fechaEntrega?.toIso8601String(),
       'precio'       : precio,
       'hecho'        : hecho ? 1 : 0,
+      'fechaHecho'   : fechaHecho?.toIso8601String(),
     };
   }
 
@@ -46,6 +49,7 @@ class Pedido {
           ? (map['precio'] as num).toDouble()
           : null,
       hecho: (map['hecho'] as int) == 1,
+      fechaHecho: map['fechaHecho'] != null ? DateTime.tryParse(map['fechaHecho']) : null,
     );
   }
 
@@ -58,6 +62,7 @@ class Pedido {
     DateTime? fechaEntrega,
     double? precio,
     bool? hecho,
+    DateTime? fechaHecho,
   }) {
     return Pedido(
       id: id ?? this.id,
@@ -68,6 +73,7 @@ class Pedido {
       fechaEntrega: fechaEntrega ?? this.fechaEntrega,
       precio: precio ?? this.precio,
       hecho: hecho ?? this.hecho,
+      fechaHecho: fechaHecho ?? this.fechaHecho,
     );
   }
 }

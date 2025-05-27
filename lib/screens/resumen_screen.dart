@@ -64,9 +64,9 @@ class _ResumenScreenState extends State<ResumenScreen> {
     double ganancias = 0;
 
     for (var p in pedidos) {
-      // Total del mes: entre el 1° y hoy
-      if (p.fechaEntrega != null) {
-        final fecha = p.fechaEntrega!;
+      // Total del mes: pedidos marcados como hechos en el mes actual
+      if (p.hecho && p.fechaHecho != null) {
+        final fecha = p.fechaHecho!;
         if (!fecha.isBefore(primerDiaMes) && !fecha.isAfter(now)) {
           totalMes++;
         }
