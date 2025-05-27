@@ -45,13 +45,12 @@ class _PedidosScreenState extends State<PedidosScreen> {
 
   Future<void> _marcarHecho(Pedido p) async {
     final ahora = DateTime.now();
-    await _db.updatePedido(
-      p.copyWith(
-        hecho: !p.hecho,
-        fechaHecho: !p.hecho ? ahora : null,
-      ),
+    final actualizado = p.copyWith(
+      hecho: !p.hecho,
+      fechaHecho: !p.hecho ? ahora : null,
     );
-    _cargarPedidos();
+    await _db.updatePedido(actualizado);
+    _cargarPedidos(); // dispara setState internamente
   }
 
   Map<String, List<Pedido>> _groupByFecha(List<Pedido> all) {

@@ -21,37 +21,33 @@ class Pedido {
     this.fechaHecho,
   });
 
-  Map<String, dynamic> toMap() {
-    return {
-      'id'           : id,
-      'cliente'      : cliente,
-      'telefono'     : telefono,
-      'titulo'       : titulo,
-      'descripcion'  : descripcion,
-      'fechaEntrega' : fechaEntrega?.toIso8601String(),
-      'precio'       : precio,
-      'hecho'        : hecho ? 1 : 0,
-      'fechaHecho'   : fechaHecho?.toIso8601String(),
-    };
-  }
+  factory Pedido.fromMap(Map<String, Object?> m) => Pedido(
+    id: m['id'] as int?,
+    cliente: m['cliente'] as String,
+    telefono: m['telefono'] as String?,
+    titulo: m['titulo'] as String,
+    descripcion: m['descripcion'] as String,
+    fechaEntrega: m['fechaEntrega'] == null
+        ? null
+        : DateTime.parse(m['fechaEntrega'] as String),
+    precio: m['precio'] == null ? null : (m['precio'] as num).toDouble(),
+    hecho: (m['hecho'] as int) == 1,
+    fechaHecho: m['fechaHecho'] == null
+        ? null
+        : DateTime.parse(m['fechaHecho'] as String),
+  );
 
-  factory Pedido.fromMap(Map<String, dynamic> map) {
-    return Pedido(
-      id: map['id'] as int?,
-      cliente: map['cliente'] as String,
-      telefono: map['telefono'] as String?,
-      titulo: map['titulo'] as String,
-      descripcion: map['descripcion'] as String,
-      fechaEntrega: map['fechaEntrega'] != null
-          ? DateTime.parse(map['fechaEntrega'] as String)
-          : null,
-      precio: map['precio'] != null
-          ? (map['precio'] as num).toDouble()
-          : null,
-      hecho: (map['hecho'] as int) == 1,
-      fechaHecho: map['fechaHecho'] != null ? DateTime.tryParse(map['fechaHecho']) : null,
-    );
-  }
+  Map<String, Object?> toMap() => {
+    'id': id,
+    'cliente': cliente,
+    'telefono': telefono,
+    'titulo': titulo,
+    'descripcion': descripcion,
+    'fechaEntrega': fechaEntrega?.toIso8601String(),
+    'precio': precio,
+    'hecho': hecho ? 1 : 0,
+    'fechaHecho': fechaHecho?.toIso8601String(),
+  };
 
   Pedido copyWith({
     int? id,
