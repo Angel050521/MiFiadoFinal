@@ -4,8 +4,39 @@ import '../models/cliente.dart';
 import '../models/movimiento.dart';
 import '../models/producto.dart';
 import '../models/pedido.dart';
+import '../models/gasto.dart';
 
 class DatabaseHelper {
+  // --- GASTOS ---
+  Future<int> insertGasto(Gasto gasto) async {
+    final db = await database;
+    return await db.insert('gastos', gasto.toMap());
+  }
+
+  Future<List<Gasto>> getGastos() async {
+    final db = await database;
+    final maps = await db.query('gastos', orderBy: 'fecha DESC');
+    return maps.map((m) => Gasto.fromMap(m)).toList();
+  }
+
+  Future<List<Gasto>> getGastosDelMes(DateTime fecha) async {
+    final db = await database;
+    final primerDiaMes = DateTime(fecha.year, fecha.month, 1);
+    final hoy = DateTime(fecha.year, fecha.month, fecha.day, 23, 59, 59);
+    final maps = await db.query(
+      'gastos',
+      where: 'fecha >= ? AND fecha <= ?',
+      whereArgs: [primerDiaMes.toIso8601String(), hoy.toIso8601String()],
+      orderBy: 'fecha DESC',
+    );
+    return maps.map((m) => Gasto.fromMap(m)).toList();
+  }
+
+  Future<void> eliminarGasto(int id) async {
+    final db = await database;
+    await db.delete('gastos', where: 'id = ?', whereArgs: [id]);
+  }
+
   static final DatabaseHelper _instance = DatabaseHelper._internal();
   static Database? _database;
 
@@ -82,6 +113,16 @@ class DatabaseHelper {
         hecho INTEGER NOT NULL DEFAULT 0
       )
     ''');
+
+    // NUEVO: tabla gastos
+    await db.execute('''
+      CREATE TABLE gastos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        concepto TEXT NOT NULL,
+        monto REAL NOT NULL,
+        fecha TEXT NOT NULL
+      )
+    ''');
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -94,6 +135,15 @@ class DatabaseHelper {
       // migración para teléfono
       await db.execute('ALTER TABLE pedidos ADD COLUMN telefono TEXT;');
     }
+    // Si la tabla gastos no existe, crearla
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS gastos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        concepto TEXT NOT NULL,
+        monto REAL NOT NULL,
+        fecha TEXT NOT NULL
+      )
+    ''');
   }
 
   // CLIENTES

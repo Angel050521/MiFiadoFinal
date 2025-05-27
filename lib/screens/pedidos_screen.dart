@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../db/database_helper.dart';
 import '../models/pedido.dart';
+import '../models/gasto.dart';
 import 'pedido_form_screen.dart';
 import 'pedido_detail_screen.dart';
+import 'gasto_form_screen.dart';
 
 class PedidosScreen extends StatefulWidget {
   const PedidosScreen({Key? key}) : super(key: key);
@@ -13,6 +15,8 @@ class PedidosScreen extends StatefulWidget {
 }
 
 class _PedidosScreenState extends State<PedidosScreen> {
+  List<Gasto> _gastos = [];
+
   final _db = DatabaseHelper();
   List<Pedido> _pedidos = [];
   String _busqueda = '';  // texto de búsqueda
@@ -21,11 +25,17 @@ class _PedidosScreenState extends State<PedidosScreen> {
   void initState() {
     super.initState();
     _cargarPedidos();
+    _cargarGastos();
   }
 
   Future<void> _cargarPedidos() async {
     final lista = await _db.getPedidos();
     setState(() => _pedidos = lista);
+  }
+
+  Future<void> _cargarGastos() async {
+    final lista = await _db.getGastos();
+    setState(() => _gastos = lista);
   }
 
   Future<void> _eliminar(int id) async {
@@ -295,39 +305,45 @@ class _PedidosScreenState extends State<PedidosScreen> {
           ],
         ),
       ),
-      floatingActionButton: GestureDetector(
-        onTap: () {
-          Navigator.push<bool>(
-            context,
-            MaterialPageRoute(builder: (_) => const PedidoFormScreen()),
-          ).then((ok) {
-            if (ok == true) _cargarPedidos();
-          });
-        },
-        child: Container(
-          width: 60,
-          height: 60,
-          decoration: BoxDecoration(
-            color: const Color(0xFF00BFFF),
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Color(0xFF00BFFF).withOpacity(0.6),
-                offset: const Offset(0, 4),
-                blurRadius: 12,
-                spreadRadius: 1,
-              ),
-              BoxShadow(
-                color: Colors.black.withOpacity(0.3),
-                offset: const Offset(0, 2),
-                blurRadius: 6,
-              ),
-            ],
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          FloatingActionButton.extended(
+            heroTag: 'gasto',
+            backgroundColor: const Color(0xFF0066CC),
+            icon: const Icon(Icons.attach_money),
+            label: const Text('Agregar gasto'),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => GastoFormScreen(
+                    onGuardar: (gasto) async {
+                      await _db.insertGasto(gasto);
+                      _cargarGastos();
+                      setState(() {});
+                    },
+                  ),
+                ),
+              );
+            },
           ),
-          child: const Center(
-            child: Icon(Icons.add, size: 28, color: Colors.white),
+          const SizedBox(height: 12),
+          FloatingActionButton(
+            heroTag: 'pedido',
+            backgroundColor: const Color(0xFF00BFFF),
+            child: const Icon(Icons.add, size: 32),
+            onPressed: () {
+              Navigator.push<bool>(
+                context,
+                MaterialPageRoute(builder: (_) => const PedidoFormScreen()),
+              ).then((ok) {
+                if (ok == true) _cargarPedidos();
+              });
+            },
           ),
-        ),
+        ],
       ),
     );
   }

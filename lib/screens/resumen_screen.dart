@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../db/database_helper.dart';
 import '../models/movimiento.dart';
 import '../models/cliente.dart';
+import '../models/gasto.dart';
 
 class ResumenScreen extends StatefulWidget {
   const ResumenScreen({super.key});
@@ -20,6 +21,10 @@ class _ResumenScreenState extends State<ResumenScreen> {
   int _totalPedidosMes = 0;
   int _pedidosPendientes = 0;
   double _gananciasBrutas = 0;
+
+  // GASTOS
+  double _totalGastos = 0;
+  double _gananciasNetas = 0;
 
   @override
   void initState() {
@@ -74,6 +79,14 @@ class _ResumenScreenState extends State<ResumenScreen> {
       }
     }
 
+    // --- Gastos del mes ---
+    final gastosMes = await _db.getGastosDelMes(now);
+    double totalGastos = 0;
+    for (var g in gastosMes) {
+      totalGastos += g.monto;
+    }
+    double gananciasNetas = ganancias - totalGastos;
+
     setState(() {
       _totalClientes = clientes.length;
       _totalCargos = cargos;
@@ -82,6 +95,8 @@ class _ResumenScreenState extends State<ResumenScreen> {
       _totalPedidosMes = totalMes;
       _pedidosPendientes = pendientes;
       _gananciasBrutas = ganancias;
+      _totalGastos = totalGastos;
+      _gananciasNetas = gananciasNetas;
     });
   }
 
@@ -119,6 +134,8 @@ class _ResumenScreenState extends State<ResumenScreen> {
                 _buildItem("📦 Total pedidos del mes", _totalPedidosMes.toString()),
                 _buildItem("⏳ Pedidos pendientes", _pedidosPendientes.toString()),
                 _buildItem("💵 Ganancias brutas", "\$${_gananciasBrutas.toStringAsFixed(2)}"),
+                _buildItem("🧾 Total gastos del mes", "\$${_totalGastos.toStringAsFixed(2)}"),
+                _buildItem("💰 Ganancias netas", "\$${_gananciasNetas.toStringAsFixed(2)}"),
               ],
             ),
           ],
