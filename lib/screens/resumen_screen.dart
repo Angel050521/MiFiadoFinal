@@ -16,6 +16,11 @@ class _ResumenScreenState extends State<ResumenScreen> {
   double _totalCargos = 0;
   double _totalAbonos = 0;
 
+  // NUEVO: variables para la card de pedidos
+  int _totalPedidosMes = 0;
+  int _pedidosPendientes = 0;
+  double _gananciasBrutas = 0;
+
   @override
   void initState() {
     super.initState();
@@ -44,10 +49,39 @@ class _ResumenScreenState extends State<ResumenScreen> {
       }
     }
 
+    // --- Pedidos: cálculo de métricas ---
+    final pedidos = await _db.getAllPedidos();
+    final now = DateTime.now();
+    final primerDiaMes = DateTime(now.year, now.month, 1);
+
+    int totalMes = 0;
+    int pendientes = 0;
+    double ganancias = 0;
+
+    for (var p in pedidos) {
+      // Total del mes: entre el 1° y hoy
+      if (p.fechaEntrega != null) {
+        final fecha = p.fechaEntrega!;
+        if (!fecha.isBefore(primerDiaMes) && !fecha.isAfter(now)) {
+          totalMes++;
+        }
+      }
+      // Pendientes
+      if (!p.hecho) pendientes++;
+      // Ganancias brutas (solo pedidos hechos)
+      if (p.hecho && p.precio != null) {
+        ganancias += p.precio!;
+      }
+    }
+
     setState(() {
       _totalClientes = clientes.length;
       _totalCargos = cargos;
       _totalAbonos = abonos;
+      // NUEVO
+      _totalPedidosMes = totalMes;
+      _pedidosPendientes = pendientes;
+      _gananciasBrutas = ganancias;
     });
   }
 
@@ -76,6 +110,15 @@ class _ResumenScreenState extends State<ResumenScreen> {
                 _buildItem("💰 Total de deuda acumulada", "\$${deudaTotal.toStringAsFixed(2)}"),
                 _buildItem("💸 Total de abonos realizados", "\$${_totalAbonos.toStringAsFixed(2)}"),
                 _buildItem("📈 Saldo promedio por cliente", "\$${saldoPromedio.toStringAsFixed(2)}"),
+              ],
+            ),
+            const SizedBox(height: 24),
+            _buildCard(
+              title: "Pedidos (mes actual)",
+              children: [
+                _buildItem("📦 Total pedidos del mes", _totalPedidosMes.toString()),
+                _buildItem("⏳ Pedidos pendientes", _pedidosPendientes.toString()),
+                _buildItem("💵 Ganancias brutas", "\$${_gananciasBrutas.toStringAsFixed(2)}"),
               ],
             ),
           ],

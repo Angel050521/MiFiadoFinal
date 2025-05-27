@@ -186,6 +186,13 @@ class DatabaseHelper {
     return maps.map((m) => Pedido.fromMap(m)).toList();
   }
 
+  /// Obtiene todos los pedidos, sin importar si están hechos o no
+  Future<List<Pedido>> getAllPedidos() async {
+    final db = await database;
+    final maps = await db.query('pedidos', orderBy: 'fechaEntrega ASC');
+    return maps.map((m) => Pedido.fromMap(m)).toList();
+  }
+
   Future<int> updatePedido(Pedido pedido) async {
     final db = await database;
     return await db.update(
