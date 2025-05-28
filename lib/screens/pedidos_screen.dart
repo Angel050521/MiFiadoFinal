@@ -227,16 +227,20 @@ class _PedidosScreenState extends State<PedidosScreen> {
       ),
     );
   }
+String _labelFecha(DateTime? fecha) {
+  if (fecha == null) return 'Sin fecha';
+  final now = DateTime.now();
 
-  String _labelFecha(DateTime? fecha) {
-    if (fecha == null) return 'Sin fecha';
-    final now = DateTime.now();
-    final diff = fecha.difference(now).inDays;
-    if (diff < 0) return 'Vencido';
-    if (diff == 0) return 'Hoy';
-    if (diff == 1) return 'Mañana';
-    return 'En $diff días';
-  }
+  // Solo año, mes y día
+  final hoy = DateTime(now.year, now.month, now.day);
+  final diaPedido = DateTime(fecha.year, fecha.month, fecha.day);
+
+  final diff = diaPedido.difference(hoy).inDays;
+  if (diff < 0) return 'Vencido';
+  if (diff == 0) return 'Hoy';
+  if (diff == 1) return 'Mañana';
+  return 'En $diff días';
+}
 
   @override
   Widget build(BuildContext context) {
