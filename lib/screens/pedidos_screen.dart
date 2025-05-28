@@ -236,8 +236,19 @@ String _labelFecha(DateTime? fecha) {
   final diaPedido = DateTime(fecha.year, fecha.month, fecha.day);
 
   final diff = diaPedido.difference(hoy).inDays;
+  
   if (diff < 0) return 'Vencido';
-  if (diff == 0) return 'Hoy';
+  if (diff == 0) {
+    // Calcular horas restantes para hoy
+    final horasRestantes = fecha.difference(now).inHours;
+    if (horasRestantes <= 0) {
+      return 'Hoy (vencido)';
+    } else if (horasRestantes == 1) {
+      return 'En 1 hora';
+    } else {
+      return 'En $horasRestantes horas';
+    }
+  }
   if (diff == 1) return 'Mañana';
   return 'En $diff días';
 }
