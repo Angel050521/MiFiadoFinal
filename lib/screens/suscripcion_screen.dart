@@ -2,6 +2,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/nube_service.dart';
+import 'package:uuid/uuid.dart';
 
 class SuscripcionScreen extends StatefulWidget {
   const SuscripcionScreen({super.key});
@@ -15,10 +17,14 @@ class _SuscripcionScreenState extends State<SuscripcionScreen> {
   final Set<String> _productIds = {'nube100mxn', 'premium150mxn'};
   List<ProductDetails> _products = [];
   bool _loading = true;
+  bool _userHasAccount = false;
+  String? _userId;
+  String? _userToken;
 
   @override
   void initState() {
     super.initState();
+    _checkUserAccount();
     _initStoreInfo();
     // Listener de compras
     final purchaseUpdated = _iap.purchaseStream;
@@ -26,6 +32,18 @@ class _SuscripcionScreenState extends State<SuscripcionScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Error en el proceso de compra')),
       );
+    });
+  }
+
+  Future<void> _checkUserAccount() async {
+    final prefs = await SharedPreferences.getInstance();
+    final userId = prefs.getString('user_id');
+    final userToken = prefs.getString('user_token');
+    
+    setState(() {
+      _userHasAccount = userId != null && userToken != null;
+      _userId = userId;
+      _userToken = userToken;
     });
   }
 
@@ -66,10 +84,27 @@ class _SuscripcionScreenState extends State<SuscripcionScreen> {
           await _iap.completePurchase(purchase);
         }
 
-        if (mounted) {
+        // Verifica si el usuario tiene una cuenta
+        if (!_userHasAccount && mounted) {
+          // Si no tiene cuenta, le pedimos que cree una
+          _showCreateAccountDialog(purchase.productID);
+        } else if (mounted && _userHasAccount) {
+          // Si ya tiene cuenta, actualizamos el plan en Cloudflare
+          final success = await NubeService.actualizarPlan(
+            userId: _userId!,
+            token: _userToken!,
+            plan: purchase.productID,
+          );
+          
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('¡Suscripción activada para ${purchase.productID}!'),
+              content: Text(
+                success 
+                  ? '¡Suscripción ${purchase.productID} activada!'
+                  : 'Suscripción local activada, pero hubo un error al actualizar en la nube.',
+              ),
+              backgroundColor: success ? null : Colors.orange,
+              duration: const Duration(seconds: 3),
             ),
           );
         }
@@ -84,7 +119,105 @@ class _SuscripcionScreenState extends State<SuscripcionScreen> {
     }
   }
 
+  // Muestra diálogo para crear cuenta después de una compra exitosa
+  void _showCreateAccountDialog(String productId) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Crear cuenta'),
+        content: const Text(
+            'Para utilizar el servicio de nube, necesitas crear una cuenta.'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _createUserAccount(productId);
+            },
+            child: const Text('Crear cuenta'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                      'No podrás usar el servicio de nube sin una cuenta.'),
+                ),
+              );
+            },
+            child: const Text('Cancelar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Crea una cuenta de usuario
+  Future<void> _createUserAccount(String productId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String userId = const Uuid().v4();
+      final String deviceId = const Uuid().v4();
+      final String token = userId + '_' + deviceId;
+      
+      // Guardar credenciales en SharedPreferences
+      await prefs.setString('user_id', userId);
+      await prefs.setString('user_token', token);
+      await prefs.setString('device_id', deviceId);
+      await prefs.setString('plan_activo', productId);
+      
+      // Actualizar el plan en Cloudflare
+      final success = await NubeService.actualizarPlan(
+        userId: userId,
+        token: token,
+        plan: productId,
+      );
+      
+      setState(() {
+        _userHasAccount = true;
+        _userId = userId;
+        _userToken = token;
+      });
+      
+      if (mounted) {
+        final message = success
+            ? 'Cuenta creada y suscripción $productId activada'
+            : 'Cuenta creada, pero hubo un error al activar la suscripción. Por favor, verifica tu conexión.';
+            
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            duration: const Duration(seconds: 4),
+            backgroundColor: success ? null : Colors.orange,
+          ),
+        );
+      }
+    } catch (e) {
+      print('❌ Error en _createUserAccount: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Error al crear la cuenta. Por favor, inténtalo de nuevo.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   void _restaurarCompras() {
+    if (!_userHasAccount) {
+      // Si no tiene cuenta, mostrar mensaje
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Necesitas crear una cuenta para restaurar compras'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+    
     _iap.restorePurchases();
   }
 

@@ -3,10 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../db/database_helper.dart';
 import '../utils/device_util.dart';
-import '../services/nube_service.dart'; // <- Corrección aquí
+import '../services/cloudflare_service.dart';
+import '../screens/home_screen.dart';
 
 class AuthScreen extends StatefulWidget {
-  const AuthScreen({super.key});
+  final bool isLogin;
+  
+  const AuthScreen({super.key, this.isLogin = true});
 
   @override
   State<AuthScreen> createState() => _AuthScreenState();
@@ -20,11 +23,13 @@ class _AuthScreenState extends State<AuthScreen> {
   final _db = DatabaseHelper();
 
   bool _isLogin = true;
+  bool _isLoading = false;
   String? _deviceId;
 
   @override
   void initState() {
     super.initState();
+    _isLogin = widget.isLogin;
     _cargarDeviceId();
   }
 
@@ -38,94 +43,72 @@ class _AuthScreenState extends State<AuthScreen> {
 
   void _submit() async {
     if (_formKey.currentState!.validate()) {
+      setState(() => _isLoading = true);
+      
       final nombre = _nombreController.text.trim();
       final email = _emailController.text.trim().toLowerCase();
-      final pass = _passwordController.text.trim();
+      final password = _passwordController.text.trim();
 
-      final prefs = await SharedPreferences.getInstance();
-
-      if (_isLogin) {
-        final usuario = await _db.loginUsuario(email, pass);
-        if (usuario != null) {
-          final plan = usuario['plan'] ?? 'gratis';
-          final userId = usuario['id'].toString();
-          final token = pass;
-
-          // Validar desde la nube si tiene plan
-          if (plan == 'nube') {
-            final permitido = await NubeService.validarODeseaMigrar(
-              userId: userId,
-              token: token,
-              deviceId: _deviceId ?? 'unknown',
-            );
-
-            if (!permitido) {
-              final migrar = await _mostrarDialogoMigrar();
-              if (migrar) {
-                await NubeService.actualizarDevice(
-                  userId: userId,
-                  token: token,
-                  deviceId: _deviceId ?? 'unknown',
-                );
-              } else {
-                _showError("No se puede iniciar sesión desde este dispositivo.");
-                return;
-              }
+      try {
+        if (_isLogin) {
+          // Iniciar sesión con Cloudflare
+          final usuario = await CloudflareService.loginUser(
+            email: email,
+            password: password,
+          );
+          
+          if (usuario != null) {
+            _showMensaje("Bienvenido, ${usuario['nombre']} 👋");
+            
+            // También guarda en SQLite para tener una copia local
+            await _db.loginUsuario(email, password);
+            
+            // Navegar a la pantalla principal
+            if (mounted) {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (_) => const HomeScreen())
+              );
             }
+          } else {
+            _showError("Correo o contraseña incorrectos");
           }
-
-          await prefs.setInt('userId', usuario['id'] as int);
-          await prefs.setString('plan', plan);
-          await prefs.setString('token', token);
-          await prefs.setString('userEmail', email);
-          await prefs.setString('deviceId_$email', _deviceId ?? '');
-
-          _showMensaje("Bienvenido, ${usuario['nombre']} 👋");
         } else {
-          _showError("Correo o contraseña incorrectos");
+          // Registrar con Cloudflare
+          final usuario = await CloudflareService.registerUser(
+            nombre: nombre,
+            email: email,
+            password: password,
+          );
+          
+          if (usuario != null) {
+            // También guarda en SQLite
+            await _db.insertUsuario(nombre, email, password);
+            
+            _showMensaje("Cuenta creada correctamente 🎉");
+            
+            // Navegar a la pantalla principal
+            if (mounted) {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (_) => const HomeScreen())
+              );
+            }
+          } else {
+            _showError("Error al crear la cuenta. Intenta con otro correo.");
+          }
         }
-      } else {
-        // Registro
-        await _db.insertUsuario(nombre, email, pass);
-        final nuevo = await _db.loginUsuario(email, pass);
-        if (nuevo != null) {
-          await prefs.setInt('userId', nuevo['id'] as int);
-          await prefs.setString('plan', 'gratis');
-          await prefs.setString('token', pass);
-          await prefs.setString('userEmail', email);
-          await prefs.setString('deviceId_$email', _deviceId ?? '');
+      } catch (e) {
+        _showError("Error de conexión: $e");
+      } finally {
+        if (mounted) {
+          setState(() => _isLoading = false);
         }
-
-        _showMensaje("Cuenta creada correctamente 🎉");
-        setState(() => _isLogin = true);
       }
     }
   }
+  
 
-  Future<bool> _mostrarDialogoMigrar() async {
-    return await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: const Color(0xFF252A3D),
-        title: const Text("¿Cambiar de dispositivo?", style: TextStyle(color: Colors.white)),
-        content: const Text(
-          "Tu cuenta está en otro celular. ¿Deseas migrarla a este dispositivo?\n\nEsto cerrará la sesión en el anterior.",
-          style: TextStyle(color: Colors.white70),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text("Cancelar", style: TextStyle(color: Colors.white54)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text("Migrar", style: TextStyle(color: Color(0xFF00BFFF))),
-          ),
-        ],
-      ),
-    ) ??
-        false;
-  }
+
+
 
   void _showMensaje(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -197,48 +180,54 @@ class _AuthScreenState extends State<AuthScreen> {
                                 const SizedBox(height: 12),
                                 _buildField(_passwordController, 'Contraseña', obscure: true),
                                 const SizedBox(height: 24),
-                                GestureDetector(
-                                  onTap: _submit,
-                                  child: Container(
-                                    width: double.infinity,
-                                    height: 50,
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF00BFFF),
-                                      borderRadius: BorderRadius.circular(12),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: const Color(0xFF00BFFF).withOpacity(0.6),
-                                          offset: const Offset(0, 4),
-                                          blurRadius: 12,
-                                          spreadRadius: 1,
-                                        ),
-                                        BoxShadow(
-                                          color: Colors.black.withOpacity(0.3),
-                                          offset: const Offset(0, 2),
-                                          blurRadius: 6,
-                                        ),
-                                      ],
-                                    ),
-                                    child: const Center(
-                                      child: Text(
-                                        'Entrar',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold,
+                                _isLoading
+                                    ? const CircularProgressIndicator(
+                                        color: Color(0xFF00BFFF),
+                                      )
+                                    : GestureDetector(
+                                        onTap: _submit,
+                                        child: Container(
+                                          width: double.infinity,
+                                          height: 56,
+                                          decoration: BoxDecoration(
+                                            gradient: const LinearGradient(
+                                              colors: [
+                                                Color(0xFF00BFFF),
+                                                Color(0xFF0080FF)
+                                              ],
+                                            ),
+                                            borderRadius: BorderRadius.circular(16),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: const Color(0xFF00BFFF).withOpacity(0.4),
+                                                offset: const Offset(0, 4),
+                                                blurRadius: 12,
+                                                spreadRadius: 1,
+                                              ),
+                                            ],
+                                          ),
+                                          child: Center(
+                                            child: Text(
+                                              _isLogin ? 'Iniciar sesión' : 'Crear cuenta',
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                  ),
-                                ),
                                 const SizedBox(height: 16),
                                 TextButton(
                                   onPressed: _toggleMode,
                                   child: Text(
                                     _isLogin
-                                        ? '¿No tienes cuenta? Crea una'
+                                        ? '¿No tienes cuenta? Regístrate'
                                         : '¿Ya tienes cuenta? Inicia sesión',
-                                    style: const TextStyle(color: Colors.white70),
+                                    style: const TextStyle(
+                                      color: Color(0xFF00BFFF),
+                                    ),
                                   ),
                                 ),
                               ],
@@ -257,28 +246,50 @@ class _AuthScreenState extends State<AuthScreen> {
     );
   }
 
-  Widget _buildField(TextEditingController controller, String label,
-      {bool obscure = false, TextInputType tipo = TextInputType.text}) {
+  Widget _buildField(
+    TextEditingController controller,
+    String label, {
+    TextInputType tipo = TextInputType.text,
+    bool obscure = false,
+  }) {
     return TextFormField(
       controller: controller,
       keyboardType: tipo,
       obscureText: obscure,
       style: const TextStyle(color: Colors.white),
-      validator: (val) => (val == null || val.trim().isEmpty) ? 'Campo obligatorio' : null,
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: const TextStyle(color: Colors.white70),
-        filled: true,
-        fillColor: const Color(0xFF252A3D),
-        focusedBorder: OutlineInputBorder(
-          borderSide: const BorderSide(color: Color(0xFF00BFFF)),
-          borderRadius: BorderRadius.circular(12),
-        ),
+        labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
         enabledBorder: OutlineInputBorder(
-          borderSide: const BorderSide(color: Colors.white24),
           borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
         ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFF00BFFF)),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.red),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.red),
+        ),
+        errorStyle: const TextStyle(color: Colors.red),
       ),
+      validator: (value) {
+        if (value == null || value.isEmpty) {
+          return 'Este campo es requerido';
+        }
+        if (tipo == TextInputType.emailAddress && !value.contains('@')) {
+          return 'Ingresa un correo válido';
+        }
+        if (obscure && value.length < 6) {
+          return 'La contraseña debe tener al menos 6 caracteres';
+        }
+        return null;
+      },
     );
   }
 }
