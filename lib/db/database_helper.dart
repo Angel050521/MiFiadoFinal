@@ -79,6 +79,19 @@ class DatabaseHelper {
     ''');
 
     await db.execute('''
+      CREATE TABLE IF NOT EXISTS suscripcion (
+        id INTEGER PRIMARY KEY,
+        plan TEXT NOT NULL,
+        fechaInicio TEXT NOT NULL,
+        fechaVencimiento TEXT,
+        estado TEXT NOT NULL,
+        tokenPago TEXT,
+        idUsuario TEXT,
+        email TEXT
+      )
+    ''');
+
+    await db.execute('''
       CREATE TABLE productos (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         cliente_id INTEGER NOT NULL,
@@ -149,6 +162,18 @@ class DatabaseHelper {
         concepto TEXT NOT NULL,
         monto REAL NOT NULL,
         fecha TEXT NOT NULL
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS suscripcion (
+        id INTEGER PRIMARY KEY,
+        plan TEXT NOT NULL,
+        fechaInicio TEXT NOT NULL,
+        fechaVencimiento TEXT,
+        estado TEXT NOT NULL,
+        tokenPago TEXT,
+        idUsuario TEXT,
+        email TEXT
       )
     ''');
   }
