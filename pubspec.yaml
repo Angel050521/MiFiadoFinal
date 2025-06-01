@@ -1,7 +1,7 @@
 name: fiado
 description: "A new Flutter project."
 publish_to: 'none'
-version: 1.0.0+6
+version: 2.0.0+10
 
 environment:
   sdk: ^3.7.2
@@ -20,6 +20,7 @@ dependencies:
   connectivity_plus: ^5.0.2
   device_info_plus: ^10.0.1
   http: ^0.13.6
+  jwt_decoder: ^2.0.1
   pdf: ^3.10.4
   printing: ^5.11.0
   path_provider: ^2.1.2
