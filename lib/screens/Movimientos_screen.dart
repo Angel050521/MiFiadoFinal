@@ -4,9 +4,9 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:printing/printing.dart';
 import '../db/database_helper.dart';
-import '../models/cliente.dart';
-import '../models/movimiento.dart';
-import '../models/producto.dart';
+import '../models/Cliente.dart';
+import '../models/Movimiento.dart';
+import '../models/Producto.dart';
 import '../utils/sync_helper.dart';
 import '../utils/pdf_generator.dart';
 import '../widgets/producto_selector.dart';
@@ -27,7 +27,7 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
   final _montoController = TextEditingController();
   final _descController = TextEditingController();
   String _tipo = 'cargo';
-  final _db = DatabaseHelper();
+  final _db = DatabaseHelper.instance;
   List<Producto> _productos = [];
   Producto? _productoSeleccionado;
   List<Movimiento> _movimientos = [];
@@ -50,7 +50,7 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
     List<Movimiento> todosLosMovimientos = [];
 
     for (var producto in _productos) {
-      final movs = await _db.getMovimientosPorProducto(producto.id!);
+      final movs = await _db.getMovimientosPorProducto(int.parse(producto.id!));
       todosLosMovimientos.addAll(movs);
     }
 
@@ -75,7 +75,7 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
   }
 
   Future<void> _cargarProductos() async {
-    final todos = await _db.getProductosPorCliente(widget.cliente.id!);
+    final todos = await _db.getProductosPorCliente(int.parse(widget.cliente.id!));
     _productos = todos;
 
     if (_productos.isNotEmpty) {
@@ -92,41 +92,129 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
   }
 
   Future<void> _cargarMovimientos() async {
-    if (_productoSeleccionado == null) {
-      setState(() {
-        _movimientos = [];
-        _saldoProducto = 0.0;
+    try {
+      print('🔄 [DEBUG] Iniciando _cargarMovimientos');
+      
+      if (_productoSeleccionado == null) {
+        print('ℹ️ [INFO] No hay producto seleccionado, limpiando lista de movimientos');
+        setState(() {
+          _movimientos = [];
+          _saldoProducto = 0.0;
+        });
+        return;
+      }
+
+      print('🔍 [DEBUG] Obteniendo movimientos para producto: ${_productoSeleccionado!.id}');
+      final productoId = int.tryParse(_productoSeleccionado!.id!);
+      
+      if (productoId == null) {
+        print('❌ [ERROR] ID de producto inválido: ${_productoSeleccionado!.id}');
+        return;
+      }
+
+      final lista = await _db.getMovimientosPorProducto(productoId);
+      print('📊 [DEBUG] Movimientos obtenidos: ${lista.length}');
+      
+      final saldo = lista.fold(0.0, (acc, m) {
+        final monto = m.tipo == 'cargo' ? m.monto : -m.monto;
+        print('   - Movimiento: ${m.id} | Tipo: ${m.tipo} | Monto: ${m.monto} | Saldo parcial: ${acc + monto}');
+        return acc + monto;
       });
-      return;
+
+      print('💰 [DEBUG] Saldo total: $saldo');
+      
+      if (mounted) {
+        setState(() {
+          _movimientos = lista;
+          _saldoProducto = saldo;
+        });
+        print('✅ [DEBUG] Estado actualizado con ${lista.length} movimientos');
+      } else {
+        print('⚠️ [WARNING] Widget no montado, no se pudo actualizar el estado');
+      }
+    } catch (e, stackTrace) {
+      print('❌ [ERROR] Error en _cargarMovimientos: $e');
+      print('Stack trace: $stackTrace');
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al cargar movimientos: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      print('🏁 [DEBUG] _cargarMovimientos finalizado\n');
     }
-
-    final lista = await _db.getMovimientosPorProducto(_productoSeleccionado!.id!);
-    final saldo = lista.fold(0.0, (acc, m) => m.tipo == 'cargo' ? acc + m.monto : acc - m.monto);
-
-    setState(() {
-      _movimientos = lista;
-      _saldoProducto = saldo;
-    });
   }
 
   Future<void> _agregarMovimiento() async {
-    final monto = double.tryParse(_montoController.text);
-    if (monto == null || monto <= 0 || _productoSeleccionado == null) return;
+    try {
+      print('🔄 [DEBUG] Iniciando _agregarMovimiento');
+      
+      final monto = double.tryParse(_montoController.text);
+      if (monto == null || monto <= 0) {
+        print('❌ [ERROR] Monto inválido: ${_montoController.text}');
+        return;
+      }
+      
+      if (_productoSeleccionado == null) {
+        print('❌ [ERROR] No hay producto seleccionado');
+        return;
+      }
 
-    final nuevo = Movimiento(
-      productoId: _productoSeleccionado!.id!,
-      fecha: DateFormat('yyyy-MM-dd – kk:mm').format(DateTime.now()),
-      tipo: _tipo,
-      monto: monto,
-      descripcion: _descController.text,
-    );
+      print('📝 [DEBUG] Creando nuevo movimiento:');
+      print('   - productoId: ${_productoSeleccionado!.id}');
+      print('   - tipo: $_tipo');
+      print('   - monto: $monto');
+      print('   - descripcion: ${_descController.text}');
 
-    await _db.insertMovimiento(nuevo);
-    _montoController.clear();
-    _descController.clear();
-    await _cargarMovimientos();
-    await _cargarProductos();
-    await _sincronizarSiEsPremium();
+      final fecha = DateFormat('yyyy-MM-dd – kk:mm').format(DateTime.now());
+      print('   - fecha: $fecha');
+
+      final nuevo = Movimiento(
+        productoId: _productoSeleccionado!.id!,
+        fecha: fecha,
+        tipo: _tipo,
+        monto: monto,
+        descripcion: _descController.text,
+      );
+
+      print('💾 [DEBUG] Guardando movimiento en la base de datos...');
+      final id = await _db.insertMovimiento(nuevo);
+      print('✅ [DEBUG] Movimiento guardado con ID: $id');
+      
+      _montoController.clear();
+      _descController.clear();
+      
+      print('🔄 [DEBUG] Recargando movimientos...');
+      await _cargarMovimientos();
+      print('✅ [DEBUG] Movimientos recargados');
+      
+      print('🔄 [DEBUG] Recargando productos...');
+      await _cargarProductos();
+      print('✅ [DEBUG] Productos recargados');
+      
+      print('🔄 [DEBUG] Sincronizando con la nube...');
+      await _sincronizarSiEsPremium();
+      print('✅ [DEBUG] Sincronización completada');
+    } catch (e, stackTrace) {
+      print('❌ [ERROR] Error en _agregarMovimiento: $e');
+      print('Stack trace: $stackTrace');
+      
+      // Mostrar un mensaje de error al usuario
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al guardar el movimiento: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      print('🏁 [DEBUG] _agregarMovimiento finalizado');
+    }
   }
 
   Future<void> _liquidarDeuda() async {
@@ -373,15 +461,16 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
   }
 
   Future<void> _cargarVistaGlobal() async {
-    final productos = await _db.getProductosPorCliente(widget.cliente.id!);
+    final clienteId = int.tryParse(widget.cliente.id ?? '0') ?? 0;
+    final productos = await _db.getProductosPorCliente(clienteId);
     final saldos = <int, double>{};
     double total = 0;
 
     for (var p in productos) {
-      final movs = await _db.getMovimientosPorProducto(p.id!);
+      final movs = await _db.getMovimientosPorProducto(int.parse(p.id!));
       final saldo = movs.fold(0.0, (s, m) => m.tipo == 'cargo' ? s + m.monto : s - m.monto);
       if (saldo > 0) {
-        saldos[p.id!] = saldo;
+        saldos[int.parse(p.id!)] = saldo;
         total += saldo;
       }
     }
@@ -498,7 +587,7 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
       }
 
       await _db.insertMovimiento(Movimiento(
-        productoId: entry.key,
+        productoId: entry.key.toString(),
         fecha: DateFormat('yyyy-MM-dd – kk:mm').format(DateTime.now()),
         tipo: 'abono',
         monto: abono,

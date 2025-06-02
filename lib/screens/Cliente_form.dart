@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../db/database_helper.dart';
-import '../models/cliente.dart';
-import '../models/producto.dart';
+import '../models/Cliente.dart';
+import '../models/Producto.dart';
 import '../utils/sync_helper.dart';
 
 class ClienteFormScreen extends StatefulWidget {
@@ -16,40 +17,119 @@ class _ClienteFormScreenState extends State<ClienteFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nombreController = TextEditingController();
   final _telefonoController = TextEditingController();
-  final _db = DatabaseHelper();
+  final _db = DatabaseHelper.instance;
 
   Future<void> _guardarCliente() async {
-    if (_formKey.currentState!.validate()) {
+    if (!_formKey.currentState!.validate()) {
+      print('❌ [ERROR] Validación del formulario fallida');
+      return;
+    }
+    
+    try {
+      print('🔄 [DEBUG] Iniciando guardado de cliente');
+      print('   - Nombre: ${_nombreController.text.trim()}');
+      print('   - Teléfono: ${_telefonoController.text.trim()}');
+      
+      // Verificar si el cliente ya existe
       final nombreNuevo = _nombreController.text.trim().toLowerCase();
+      print('🔍 [DEBUG] Verificando si el cliente ya existe...');
+      
+      try {
+        final clientesExistentes = await _db.getClientes();
+        print('   - Clientes existentes: ${clientesExistentes.length}');
+        
+        final yaExiste = clientesExistentes.any(
+          (c) => c.nombre.trim().toLowerCase() == nombreNuevo,
+        );
 
-      final clientesExistentes = await _db.getClientes();
-      final yaExiste = clientesExistentes.any(
-            (c) => c.nombre.trim().toLowerCase() == nombreNuevo,
-      );
-
-      if (yaExiste) {
-        _showErrorDialog("Ya existe un cliente con ese nombre. Por favor elige otro.");
-        return;
+        if (yaExiste) {
+          print('⚠️ [WARNING] Ya existe un cliente con ese nombre');
+          if (mounted) {
+            _showErrorDialog("Ya existe un cliente con ese nombre. Por favor elige otro.");
+          }
+          return;
+        }
+      } catch (e) {
+        print('⚠️ [WARNING] Error al verificar clientes existentes: $e');
+        // Continuar con el guardado a pesar del error de verificación
       }
 
+      // Guardar el cliente localmente
+      print('💾 [DEBUG] Guardando cliente en la base de datos local...');
       final nuevoCliente = Cliente(
         nombre: _nombreController.text.trim(),
         telefono: _telefonoController.text.trim(),
       );
-
+      
       final idNuevoCliente = await _db.insertCliente(nuevoCliente);
+      print('✅ [DEBUG] Cliente guardado con ID: $idNuevoCliente');
 
-      await _db.insertProducto(Producto(
-        clienteId: idNuevoCliente,
-        nombre: 'Cuenta principal',
-        descripcion: 'Cuenta general del cliente',
-        fechaCreacion: DateFormat('yyyy-MM-dd').format(DateTime.now()),
-      ));
+      // Crear la cuenta principal
+      print('💾 [DEBUG] Creando cuenta principal...');
+      try {
+        await _db.insertProducto(Producto(
+          clienteId: idNuevoCliente.toString(),
+          nombre: 'Cuenta principal',
+          descripcion: 'Cuenta general del cliente',
+          fechaCreacion: DateFormat('yyyy-MM-dd').format(DateTime.now()),
+        ));
+        print('✅ [DEBUG] Cuenta principal creada');
+      } catch (e) {
+        print('⚠️ [WARNING] Error al crear la cuenta principal: $e');
+        // Continuar a pesar del error en la creación de la cuenta
+      }
 
-      await SyncHelper.marcarPendiente();
-      await SyncHelper.intentarSincronizar();
+      // Verificar el plan del usuario antes de marcar para sincronización
+      final prefs = await SharedPreferences.getInstance();
+      final plan = prefs.getString('plan') ?? '';
+      final esPlanValido = plan == 'nube100mxn' || plan == 'premium150mxn';
+      
+      print('🔍 [DEBUG] Verificando plan del usuario:');
+      print('   - Plan actual: $plan');
+      print('   - Plan válido para sincronización: $esPlanValido');
+      
+      if (esPlanValido) {
+        // Marcar como pendiente de sincronizar solo si el plan es válido
+        print('🔄 [DEBUG] Marcando como pendiente de sincronización...');
+        await SyncHelper.marcarPendiente();
+        
+        // Actualizar la hora de la última sincronización
+        final ahora = DateTime.now();
+        final fechaFormateada = '${ahora.day}/${ahora.month}/${ahora.year} ${ahora.hour}:${ahora.minute.toString().padLeft(2, '0')}';
+        await prefs.setString('last_sync', ahora.toIso8601String());
+        
+        // Intentar sincronizar en segundo plano
+        print('🔄 [DEBUG] Iniciando sincronización en segundo plano...');
+        _sincronizarEnSegundoPlano();
+      } else {
+        print('ℹ️ [INFO] Plan actual no permite sincronización. Omitiendo sincronización.');
+      }
+      
+      // Mostrar mensaje de éxito
+      if (mounted) {
+        print('✅ [DEBUG] Mostrando mensaje de éxito');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Cliente guardado correctamente'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+        
+        // Cerrar el teclado si está abierto
+        FocusScope.of(context).unfocus();
+      }
 
-      _showSuccessDialog();
+      // Mostrar diálogo de éxito
+      if (mounted) {
+        _showSuccessDialog();
+      }
+    } catch (e, stackTrace) {
+      print('❌ [ERROR] Error en _guardarCliente: $e');
+      print('Stack trace: $stackTrace');
+      
+      if (mounted) {
+        _showErrorDialog('Error al guardar el cliente: $e');
+      }
     }
   }
 
@@ -99,12 +179,49 @@ class _ClienteFormScreenState extends State<ClienteFormScreen> {
         content: Text(mensaje, style: const TextStyle(color: Colors.white70)),
         actions: [
           TextButton(
+            onPressed: () => Navigator.pop(context),
             child: const Text("Aceptar", style: TextStyle(color: Colors.white)),
-            onPressed: () => Navigator.of(context).pop(),
-          )
+          ),
         ],
       ),
     );
+  }
+
+  void _sincronizarEnSegundoPlano() async {
+    print('🔄 [DEBUG] Iniciando sincronización en segundo plano...');
+    try {
+      print('   - Llamando a SyncHelper.intentarSincronizar()');
+      await SyncHelper.intentarSincronizar();
+      print('✅ [DEBUG] Sincronización completada exitosamente');
+      
+      // Si llegamos aquí, la sincronización fue exitosa
+      if (mounted) {
+        print('   - Mostrando mensaje de éxito');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Datos sincronizados correctamente'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e, stackTrace) {
+      // La sincronización falló
+      print('❌ [ERROR] Error al sincronizar en segundo plano: $e');
+      print('Stack trace: $stackTrace');
+      
+      // Mostrar mensaje de error solo en desarrollo
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al sincronizar: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    } finally {
+      print('🔚 [DEBUG] Finalizada sincronización en segundo plano');
+    }
   }
 
   @override

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../models/producto.dart';
+import '../models/Producto.dart';
 
 class VistaGlobal extends StatelessWidget {
   final double saldoTotal;

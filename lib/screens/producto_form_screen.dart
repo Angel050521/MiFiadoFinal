@@ -16,7 +16,7 @@ class ProductoFormScreen extends StatefulWidget {
 class _ProductoFormScreenState extends State<ProductoFormScreen> {
   final _nombreController = TextEditingController();
   final _descripcionController = TextEditingController();
-  final _db = DatabaseHelper();
+  final _db = DatabaseHelper.instance;
 
   Future<void> _guardarProducto() async {
     final nombre = _nombreController.text.trim();

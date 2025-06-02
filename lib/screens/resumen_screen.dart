@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../db/database_helper.dart';
-import '../models/movimiento.dart';
-import '../models/cliente.dart';
+import '../models/Movimiento.dart';
+import '../models/Cliente.dart';
 import '../models/gasto.dart';
 
 class ResumenScreen extends StatefulWidget {
@@ -12,7 +12,7 @@ class ResumenScreen extends StatefulWidget {
 }
 
 class _ResumenScreenState extends State<ResumenScreen> {
-  final _db = DatabaseHelper();
+  final _db = DatabaseHelper.instance;
   int _totalClientes = 0;
   double _totalCargos = 0;
   double _totalAbonos = 0;
@@ -37,9 +37,9 @@ class _ResumenScreenState extends State<ResumenScreen> {
     final movimientos = <Movimiento>[];
 
     for (var cliente in clientes) {
-      final productos = await _db.getProductosPorCliente(cliente.id!);
+      final productos = await _db.getProductosPorCliente(int.parse(cliente.id!));
       for (var producto in productos) {
-        final movs = await _db.getMovimientosPorProducto(producto.id!);
+        final movs = await _db.getMovimientosPorProducto(int.parse(producto.id!));
         movimientos.addAll(movs);
       }
     }

@@ -6,6 +6,7 @@ import '../models/gasto.dart';
 import 'pedido_form_screen.dart';
 import 'pedido_detail_screen.dart';
 import 'gasto_form_screen.dart';
+import '../utils/sync_helper.dart';
 
 class PedidosScreen extends StatefulWidget {
   const PedidosScreen({Key? key}) : super(key: key);
@@ -17,7 +18,7 @@ class PedidosScreen extends StatefulWidget {
 class _PedidosScreenState extends State<PedidosScreen> {
   List<Gasto> _gastos = [];
 
-  final _db = DatabaseHelper();
+  final _db = DatabaseHelper.instance;
   List<Pedido> _pedidos = [];
   String _busqueda = '';  // texto de búsqueda
 
@@ -38,9 +39,11 @@ class _PedidosScreenState extends State<PedidosScreen> {
     setState(() => _gastos = lista);
   }
 
-  Future<void> _eliminar(int id) async {
-    await _db.eliminarPedido(id);
+  Future<void> _eliminar(String id) async {
+    await _db.eliminarPedido(int.parse(id));
+    await SyncHelper.marcarPendiente();
     _cargarPedidos();
+    await SyncHelper.intentarSincronizar();
   }
 
   Future<void> _marcarHecho(Pedido p) async {
@@ -50,7 +53,9 @@ class _PedidosScreenState extends State<PedidosScreen> {
       fechaHecho: !p.hecho ? ahora : null,
     );
     await _db.updatePedido(actualizado);
-    _cargarPedidos(); // dispara setState internamente
+    await SyncHelper.marcarPendiente();
+    _cargarPedidos();
+    await SyncHelper.intentarSincronizar();
   }
 
   Map<String, List<Pedido>> _groupByFecha(List<Pedido> all) {
@@ -109,7 +114,11 @@ class _PedidosScreenState extends State<PedidosScreen> {
           context,
           MaterialPageRoute(builder: (_) => PedidoDetailScreen(pedido: p)),
         );
-        if (mod != null) _cargarPedidos();
+        if (mod != null) {
+          _cargarPedidos();
+          await SyncHelper.marcarPendiente();
+          await SyncHelper.intentarSincronizar();
+        }
       },
       onLongPress: () => _showOptions(p),
       child: Card(
@@ -213,6 +222,8 @@ class _PedidosScreenState extends State<PedidosScreen> {
                         onPressed: () {
                           Navigator.pop(context);
                           _eliminar(p.id!);
+                          SyncHelper.marcarPendiente();
+                          SyncHelper.intentarSincronizar();
                         },
                         child: const Text('Eliminar', style: TextStyle(color: Colors.red)),
                       ),
@@ -340,8 +351,10 @@ String _labelFecha(DateTime? fecha) {
                     builder: (_) => GastoFormScreen(
                       onGuardar: (gasto) async {
                         await _db.insertGasto(gasto);
+                        await SyncHelper.marcarPendiente();
                         _cargarGastos();
                         setState(() {});
+                        await SyncHelper.intentarSincronizar();
                       },
                     ),
                   ),

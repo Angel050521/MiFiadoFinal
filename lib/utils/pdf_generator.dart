@@ -4,9 +4,9 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
-import '../models/cliente.dart';
-import '../models/movimiento.dart';
-import '../models/producto.dart';
+import '../models/Cliente.dart';
+import '../models/Movimiento.dart';
+import '../models/Producto.dart';
 
 class PdfGenerator {
   static Future<File> generarResumen(

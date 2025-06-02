@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS productos (
   nombre TEXT NOT NULL,
   descripcion TEXT,
   fecha_creacion TEXT NOT NULL,
-  FOREIGN KEY (cliente_id) REFERENCES clientes(id)
+  FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE
 );
 
 -- Tabla de movimientos
@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS movimientos (
   tipo TEXT NOT NULL CHECK(tipo IN ('cargo', 'abono')),
   monto REAL NOT NULL,
   descripcion TEXT,
-  FOREIGN KEY (producto_id) REFERENCES productos(id)
+  FOREIGN KEY (producto_id) REFERENCES productos(id) ON DELETE CASCADE
 );
 
 -- Tabla de pedidos

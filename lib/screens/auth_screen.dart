@@ -20,7 +20,7 @@ class _AuthScreenState extends State<AuthScreen> {
   final _nombreController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _db = DatabaseHelper();
+  final _db = DatabaseHelper.instance;
 
   bool _isLogin = true;
   bool _isLoading = false;

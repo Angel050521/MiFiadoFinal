@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../db/database_helper.dart';
-import '../models/cliente.dart';
+import '../models/Cliente.dart';
 import '../utils/network_util.dart';
 import '../utils/sync_helper.dart';
 import 'movimientos_screen.dart';
@@ -14,7 +14,7 @@ class ClienteListaScreen extends StatefulWidget {
 }
 
 class ClienteListaScreenState extends State<ClienteListaScreen> {
-  final _db = DatabaseHelper();
+  final _db = DatabaseHelper.instance;
   List<Cliente> _clientes = [];
   String _busqueda = '';
   String _estadoConexion = 'Desconectado';
@@ -24,8 +24,27 @@ class ClienteListaScreenState extends State<ClienteListaScreen> {
   @override
   void initState() {
     super.initState();
-    cargarClientes();
-    _cargarEstadoSync();
+    _cargarDatosIniciales();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Recargar datos cada vez que la pantalla se vuelva a mostrar
+    _cargarDatosIniciales();
+  }
+
+  Future<void> _cargarDatosIniciales() async {
+    await cargarClientes();
+    await _cargarEstadoSync();
+    
+    // Verificar si hay cambios pendientes de sincronizar
+    if (mounted) {
+      final pendiente = await SyncHelper.hayPendientes();
+      if (pendiente) {
+        _sincronizarSiEsPosible();
+      }
+    }
   }
 
   Future<void> cargarClientes() async {
@@ -34,35 +53,127 @@ class ClienteListaScreenState extends State<ClienteListaScreen> {
   }
 
   Future<void> _cargarEstadoSync() async {
-    final prefs = await SharedPreferences.getInstance();
-    final conectado = await NetworkUtil.hayConexion();
-    final ultima = prefs.getString('lastSync') ?? 'Nunca';
-    final pendiente = prefs.getBool('pendienteSync') ?? false;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final conectado = await NetworkUtil.hayConexion();
+      final ultima = prefs.getString('last_sync') ?? 'Nunca';
+      final pendiente = await SyncHelper.hayPendientes();
 
-    setState(() {
-      _estadoConexion = conectado ? 'Conectado' : 'Desconectado';
-      _ultimaSync = ultima;
-      _pendienteSync = pendiente;
-    });
+      if (mounted) {
+        setState(() {
+          _estadoConexion = conectado ? 'Conectado' : 'Desconectado';
+          _ultimaSync = ultima;
+          _pendienteSync = pendiente;
+        });
+      }
+    } catch (e) {
+      print('❌ Error en _cargarEstadoSync: $e');
+      if (mounted) {
+        _mostrarSnackBar('Error al cargar el estado de sincronización');
+      }
+    }
   }
 
   Future<void> _eliminarCliente(Cliente cliente) async {
-    await _db.eliminarCliente(cliente.id!);
-    await _sincronizarSiEsPosible();
-    cargarClientes();
-    _mostrarSnackBar('Cliente eliminado');
+    try {
+      // Asegurarse de que el ID se pase como String
+      await _db.eliminarCliente(cliente.id!.toString());
+      await SyncHelper.marcarPendiente();
+      await _sincronizarSiEsPosible();
+      await cargarClientes();
+      _mostrarSnackBar('Cliente eliminado');
+    } catch (e) {
+      print('❌ Error al eliminar cliente: $e');
+      _mostrarSnackBar('Error al eliminar el cliente');
+    }
   }
 
-  Future<void> _sincronizarSiEsPosible() async {
-    final prefs = await SharedPreferences.getInstance();
-    final userId = prefs.getString('userId');
-    final token = prefs.getString('token');
-    final plan = prefs.getString('plan');
+  Future<bool> _sincronizarSiEsPosible() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getString('userId');
+      final token = prefs.getString('token');
+      final plan = prefs.getString('plan');
 
-    final hayConexion = await NetworkUtil.hayConexion();
-    if (hayConexion && userId != null && token != null && (plan == 'premium' || plan == 'basico')) {
-      await SyncHelper.sincronizar(userId, token);
-      _cargarEstadoSync();
+      // Verificar si hay conexión a internet
+      final hayConexion = await NetworkUtil.hayConexion();
+      if (!hayConexion) {
+        _mostrarSnackBar('❌ No hay conexión a internet');
+        return false;
+      }
+
+      // Verificar credenciales
+      if (userId == null || token == null) {
+        _mostrarSnackBar('❌ No se encontró la sesión. Inicia sesión nuevamente.');
+        // Limpiar datos de sesión
+        await prefs.remove('token');
+        await prefs.remove('userId');
+        // Navegar a pantalla de login
+        if (mounted) {
+          Navigator.pushNamedAndRemoveUntil(context, '/welcome', (route) => false);
+        }
+        return false;
+      }
+
+      // Verificar plan
+      if (plan != 'nube100mxn' && plan != 'premium150mxn') {
+        _mostrarSnackBar('❌ Tu plan no permite sincronización');
+        print('⚠️ Plan actual no válido para sincronización: $plan');
+        return false;
+      }
+
+      // Mostrar indicador de carga
+      if (mounted) {
+        setState(() {
+          _estadoConexion = 'Sincronizando...';
+        });
+      }
+
+      // Realizar la sincronización
+      try {
+        await SyncHelper.sincronizar(userId, token);
+        
+        // Actualizar la interfaz
+        if (mounted) {
+          await _cargarEstadoSync();
+          _mostrarSnackBar('✅ Sincronización exitosa');
+        }
+        return true;
+      } catch (e) {
+        print('❌ Error en sincronización: $e');
+        
+        // Manejar errores específicos
+        if (e.toString().toLowerCase().contains('no autorizado') || 
+            e.toString().contains('401')) {
+          _mostrarSnackBar('❌ Tu sesión ha expirado. Inicia sesión nuevamente.');
+          // Limpiar datos de sesión
+          await prefs.remove('token');
+          await prefs.remove('userId');
+          // Navegar a pantalla de login
+          if (mounted) {
+            Navigator.pushNamedAndRemoveUntil(context, '/welcome', (route) => false);
+          }
+        } else {
+          _mostrarSnackBar('❌ Error al sincronizar: ${e.toString()}');
+          if (mounted) {
+            _estadoConexion = 'Error de sincronización';
+          }
+        }
+        return false;
+      } finally {
+        if (mounted) {
+          await _cargarEstadoSync();
+          await cargarClientes();
+        }
+      }
+    } catch (e) {
+      print('❌ Error en _sincronizarSiEsPosible: $e');
+      if (mounted) {
+        _mostrarSnackBar('❌ Error inesperado: ${e.toString()}');
+        // Recargar el estado para asegurar que la UI esté actualizada
+        await _cargarEstadoSync();
+      }
+      return false;
     }
   }
 
@@ -113,8 +224,8 @@ class ClienteListaScreenState extends State<ClienteListaScreen> {
       child: Row(
         children: [
           Icon(
-            _estadoConexion == 'Conectado' ? Icons.wifi : Icons.wifi_off,
-            color: _estadoConexion == 'Conectado' ? Colors.greenAccent : Colors.redAccent,
+            _estadoConexion == 'Conectado' ? Icons.wifi : _estadoConexion == 'Sincronizando...' ? Icons.sync : Icons.wifi_off,
+            color: _estadoConexion == 'Conectado' ? Colors.greenAccent : _estadoConexion == 'Sincronizando...' ? Colors.blueAccent : Colors.redAccent,
           ),
           const SizedBox(width: 10),
           Expanded(

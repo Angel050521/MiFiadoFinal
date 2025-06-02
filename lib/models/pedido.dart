@@ -1,5 +1,5 @@
 class Pedido {
-  final int? id;
+  final String? id;
   final String cliente;
   final String? telefono;
   final String titulo;
@@ -21,36 +21,54 @@ class Pedido {
     this.fechaHecho,
   });
 
-  factory Pedido.fromMap(Map<String, Object?> m) => Pedido(
-    id: m['id'] as int?,
-    cliente: m['cliente'] as String,
-    telefono: m['telefono'] as String?,
-    titulo: m['titulo'] as String,
-    descripcion: m['descripcion'] as String,
-    fechaEntrega: m['fechaEntrega'] == null
-        ? null
-        : DateTime.parse(m['fechaEntrega'] as String),
-    precio: m['precio'] == null ? null : (m['precio'] as num).toDouble(),
-    hecho: (m['hecho'] as int) == 1,
-    fechaHecho: m['fechaHecho'] == null
-        ? null
-        : DateTime.parse(m['fechaHecho'] as String),
-  );
+  factory Pedido.fromMap(Map<String, Object?> m) {
+    // Handle both snake_case and camelCase field names from database
+    final cliente = m['cliente'] as String? ?? m['cliente_nombre'] as String? ?? '';
+    final telefono = m['telefono'] as String? ?? m['cliente_telefono'] as String?;
+    
+    // For date fields, try both formats and handle potential parsing errors
+    DateTime? parseDate(dynamic dateValue) {
+      if (dateValue == null) return null;
+      try {
+        if (dateValue is DateTime) return dateValue;
+        if (dateValue is String) return DateTime.parse(dateValue);
+        return null;
+      } catch (e) {
+        print('Error parsing date: $e');
+        return null;
+      }
+    }
+    
+    return Pedido(
+      id: m['id']?.toString(),
+      cliente: cliente,
+      telefono: telefono,
+      titulo: m['titulo'] as String? ?? '',
+      descripcion: m['descripcion'] as String? ?? '',
+      fechaEntrega: parseDate(m['fechaEntrega'] ?? m['fecha_entrega']),
+      precio: (m['precio'] as num?)?.toDouble(),
+      hecho: (m['hecho'] is int ? (m['hecho'] as int) == 1 : (m['hecho'] as bool?) ?? false),
+      fechaHecho: parseDate(m['fechaHecho'] ?? m['fecha_hecho']),
+    );
+  }
 
-  Map<String, Object?> toMap() => {
-    'id': id,
-    'cliente': cliente,
-    'telefono': telefono,
-    'titulo': titulo,
-    'descripcion': descripcion,
-    'fechaEntrega': fechaEntrega?.toIso8601String(),
-    'precio': precio,
-    'hecho': hecho ? 1 : 0,
-    'fechaHecho': fechaHecho?.toIso8601String(),
-  };
+  Map<String, Object?> toMap() {
+    return {
+      'id': id != null ? int.tryParse(id!) : null,
+      'cliente_id': int.tryParse(cliente), // Asumiendo que cliente es el ID como string
+      'cliente_nombre': cliente, // Guardamos el nombre del cliente
+      'cliente_telefono': telefono ?? '',
+      'titulo': titulo,
+      'descripcion': descripcion,
+      'fecha_entrega': fechaEntrega?.toIso8601String(),
+      'precio': precio,
+      'hecho': hecho ? 1 : 0,
+      'fecha_hecho': fechaHecho?.toIso8601String(),
+    };
+  }
 
   Pedido copyWith({
-    int? id,
+    String? id,
     String? cliente,
     String? telefono,
     String? titulo,
@@ -72,4 +90,16 @@ class Pedido {
       fechaHecho: fechaHecho ?? this.fechaHecho,
     );
   }
+
+
+  factory Pedido.fromFirestore(Map<String, dynamic> data, String id) => Pedido(
+    id: id,
+    cliente: data['cliente'] as String,
+    titulo: data['titulo'] as String,
+    descripcion: data['descripcion'] as String,
+    fechaEntrega: data['fechaEntrega']?.toDate(),
+    precio: data['precio']?.toDouble(),
+    hecho: data['hecho'] as bool? ?? false,
+    fechaHecho: data['fechaHecho']?.toDate(),
+  );
 }

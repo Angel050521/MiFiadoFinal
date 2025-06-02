@@ -21,7 +21,7 @@ class _PedidoFormScreenState extends State<PedidoFormScreen> {
 
   DateTime? _fechaEntrega;
   TimeOfDay? _horaEntrega;
-  final _db = DatabaseHelper();
+  final _db = DatabaseHelper.instance;
 
   @override
   void initState() {

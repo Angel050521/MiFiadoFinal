@@ -1,5 +1,5 @@
 name = "fiadosync"
-main = "fiadosync/src/index.js"
+main = "fiadosync/src/index.js"  # Ajusta esta ruta según tu estructura
 compatibility_date = "2024-05-20"
 
 kv_namespaces = [
@@ -7,7 +7,6 @@ kv_namespaces = [
 ]
 
 [[d1_databases]]
-binding = "da06318f-e197-4d46-9c6e-1062d6652004"  # <- IGUAL AL DB_ID EN EL CÓDIGO
+binding = "DB"  # Nombre que usas en tu código (env.DB)
 database_name = "fiados_d1"
 database_id = "da06318f-e197-4d46-9c6e-1062d6652004"
-
