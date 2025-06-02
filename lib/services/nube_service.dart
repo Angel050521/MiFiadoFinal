@@ -89,7 +89,7 @@ class NubeService {
     }
   }
 
-  /// 🔄 Envía los datos a la nube (clientes, productos y movimientos)
+  /// 🔄 Envía los datos a la nube (clientes, productos, movimientos y pedidos)
   /// con manejo mejorado de registros eliminados
   static Future<Map<String, dynamic>> sincronizarConNube({
     required String userId,
@@ -98,6 +98,7 @@ class NubeService {
     required List<Map<String, dynamic>> productos,
     required List<Map<String, dynamic>> movimientos,
     required Map<String, dynamic> deleted,
+    List<Map<String, dynamic>> pedidos = const [],
   }) async {
     // Validar token
     if (token.isEmpty) {
@@ -131,6 +132,7 @@ class NubeService {
         'clientes': clientes,
         'productos': productos,
         'movimientos': movimientos,
+        'pedidos': pedidos, // Incluir pedidos en los datos a sincronizar
         'deleted': deleted.isEmpty ? {} : deleted, // Enviar objeto vacío si no hay eliminados
         'timestamp': DateTime.now().toIso8601String(),
       };      
@@ -171,6 +173,7 @@ class NubeService {
         'clientes': clientes.length,
         'productos': productos.length,
         'movimientos': movimientos.length,
+        'pedidos': pedidos.length,
         'deleted': deleted.map((k, v) => MapEntry(k, v is List ? v.length : v)),
       }}');
 

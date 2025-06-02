@@ -47,17 +47,23 @@ class SyncHelper {
         final clientes = await db.getClientes();
         List<Map<String, dynamic>> productosJson = [];
         List<Map<String, dynamic>> movimientosJson = [];
+        List<Map<String, dynamic>> pedidosJson = [];
 
         print('📊 [DEBUG] Procesando ${clientes.length} clientes...');
         // Recopilar datos locales
         for (final cliente in clientes) {
           try {
+            // Obtener productos del cliente
             final productos = await db.getProductosPorCliente(int.parse(cliente.id!));
             for (final producto in productos) {
               productosJson.add(producto.toMap());
               final movimientos = await db.getMovimientosPorProducto(int.parse(producto.id!));
               movimientosJson.addAll(movimientos.map((m) => m.toMap()));
             }
+            
+            // Obtener pedidos del cliente
+            final pedidos = await db.getPedidosPorCliente(int.parse(cliente.id!));
+            pedidosJson.addAll(pedidos.map((p) => p.toMap()));
           } catch (e) {
             print('⚠️ [WARN] Error al obtener datos del cliente ${cliente.id}: $e');
             // Continuar con los siguientes clientes
@@ -165,6 +171,7 @@ class SyncHelper {
           clientes: clientes,
           productos: productosJson,
           movimientos: movimientosJson,
+          pedidos: pedidosJson,
           deleted: deletedMap,
         );
         
@@ -238,6 +245,7 @@ class SyncHelper {
     required List<Map<String, dynamic>> productos,
     required List<Map<String, dynamic>> movimientos,
     required Map<String, dynamic> deleted,
+    required List<Map<String, dynamic>> pedidos,
   }) async {
     try {
       // Tamaño de lote para cada tipo de dato
@@ -258,6 +266,7 @@ class SyncHelper {
           clientes: batch.map((c) => c.toMap()).toList(),
           productos: [],
           movimientos: [],
+          pedidos: [],
           deleted: {},
         );
         
@@ -284,6 +293,7 @@ class SyncHelper {
           clientes: [],
           productos: batch,
           movimientos: [],
+          pedidos: [],
           deleted: {},
         );
         
@@ -309,6 +319,33 @@ class SyncHelper {
           clientes: [],
           productos: [],
           movimientos: batch,
+          pedidos: [],
+          deleted: {},
+        );
+        
+        if (response['success'] != true) {
+          return response; // Retornar en caso de error
+        }
+        
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+      
+      // Enviar pedidos en lotes
+      for (var i = 0; i < pedidos.length; i += batchSize) {
+        final batch = pedidos.sublist(
+          i,
+          i + batchSize > pedidos.length ? pedidos.length : i + batchSize,
+        );
+        
+        print('📦 Enviando lote de pedidos ${i ~/ batchSize + 1} (${batch.length} registros)');
+        
+        final response = await NubeService.sincronizarConNube(
+          userId: userId,
+          token: token,
+          clientes: [],
+          productos: [],
+          movimientos: [],
+          pedidos: batch,
           deleted: {},
         );
         
@@ -329,6 +366,7 @@ class SyncHelper {
           clientes: [],
           productos: [],
           movimientos: [],
+          pedidos: [],
           deleted: deleted,
         );
         

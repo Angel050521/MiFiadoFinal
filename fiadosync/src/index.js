@@ -42,8 +42,18 @@ export default {
       );
     }
 
-    // -------------------- RUTAS PÚBLICAS --------------------
-    if ((cleanPath === '/api/usuarios' || cleanPath === '/api/auth/register') && request.method === 'POST') {
+    // Inicializar la base de datos
+  try {
+    await initDatabase(db);
+  } catch (error) {
+    return new Response(
+      JSON.stringify({ error: 'Error al inicializar la base de datos', details: error.message }),
+      { status: 500, headers: corsHeaders }
+    );
+  }
+
+  // -------------------- RUTAS PÚBLICAS --------------------
+  if ((cleanPath === '/api/usuarios' || cleanPath === '/api/auth/register') && request.method === 'POST') {
       return handleRegister(request, db);
     }
     if ((cleanPath === '/api/usuarios/login' || cleanPath === '/api/auth/login') && request.method === 'POST') {
@@ -87,6 +97,35 @@ export default {
 };
 
 // -------------------- HANDLERS --------------------
+
+// Función para inicializar la base de datos si no existe
+async function initDatabase(db) {
+  try {
+    // Crear tabla de pedidos si no existe
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS pedidos (
+        id INTEGER PRIMARY KEY,
+        cliente_id INTEGER,
+        titulo TEXT NOT NULL,
+        descripcion TEXT,
+        fecha_entrega TEXT,
+        precio REAL,
+        hecho INTEGER DEFAULT 0,
+        fecha_hecho TEXT,
+        cliente_nombre TEXT,
+        cliente_telefono TEXT,
+        userId INTEGER,
+        createdAt TEXT,
+        FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE SET NULL
+      )
+    `).run();
+    
+    console.log('✅ Tabla de pedidos inicializada');
+  } catch (error) {
+    console.error('❌ Error al inicializar la base de datos:', error);
+    throw error;
+  }
+}
 
 async function handleRegister(request, db) {
   try {
@@ -228,49 +267,49 @@ async function handleSyncData(request, db) {
     }
 
     // Sincronizar PEDIDOS
-    for (const ped of pedidos) {
-      await db.prepare(`
-        INSERT INTO pedidos (
-          id, 
-          cliente_id, 
-          cliente_nombre, 
-          cliente_telefono,
-          titulo, 
-          descripcion, 
-          fecha_entrega, 
-          precio, 
-          hecho,
-          fecha_hecho,
-          userId, 
-          createdAt
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET
-          cliente_id = excluded.cliente_id,
-          cliente_nombre = excluded.cliente_nombre,
-          cliente_telefono = excluded.cliente_telefono,
-          titulo = excluded.titulo,
-          descripcion = excluded.descripcion,
-          fecha_entrega = excluded.fecha_entrega,
-          precio = excluded.precio,
-          hecho = excluded.hecho,
-          fecha_hecho = excluded.fecha_hecho,
-          userId = excluded.userId,
-          createdAt = excluded.createdAt
-      `).bind(
-        ped.id ?? null,
-        ped.cliente_id ? parseInt(ped.cliente_id) : null,
-        ped.cliente_nombre ?? '',
-        ped.cliente_telefono ?? '',
-        ped.titulo ?? '',
-        ped.descripcion ?? '',
-        ped.fecha_entrega ?? new Date().toISOString(),
-        ped.precio ?? 0,
-        ped.hecho ?? 0,
-        ped.fecha_hecho || null,
-        ped.userId ?? userId ?? null,
-        ped.createdAt ?? new Date().toISOString()
-      ).run();
+    if (pedidos && pedidos.length > 0) {
+      console.log(`🔄 Sincronizando ${pedidos.length} pedidos`);
+      
+      for (const ped of pedidos) {
+        try {
+          await db.prepare(`
+            INSERT INTO pedidos (
+              id, cliente_id, cliente_nombre, cliente_telefono, titulo, descripcion, fecha_entrega, 
+              precio, hecho, fecha_hecho, userId, createdAt
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+              cliente_id = excluded.cliente_id,
+              cliente_nombre = excluded.cliente_nombre,
+              cliente_telefono = excluded.cliente_telefono,
+              titulo = excluded.titulo,
+              descripcion = excluded.descripcion,
+              fecha_entrega = excluded.fecha_entrega,
+              precio = excluded.precio,
+              hecho = excluded.hecho,
+              fecha_hecho = excluded.fecha_hecho,
+              userId = excluded.userId,
+              createdAt = excluded.createdAt
+          `).bind(
+            ped.id ?? null,
+            ped.cliente_id ? parseInt(ped.cliente_id) : null,
+            ped.cliente_nombre ?? '',
+            ped.cliente_telefono ?? '',
+            ped.titulo ?? '',
+            ped.descripcion ?? '',
+            ped.fecha_entrega ?? new Date().toISOString(),
+            ped.precio ?? 0,
+            ped.hecho ?? 0,
+            ped.fecha_hecho || null,
+            ped.userId ?? userId ?? null,
+            ped.createdAt ?? new Date().toISOString()
+          ).run();
+          
+          console.log(`✅ Pedido ${ped.id} sincronizado correctamente`);
+        } catch (error) {
+          console.error(`❌ Error al sincronizar pedido ${ped.id}:`, error);
+        }
+      }
     }
 
     // Procesar eliminaciones
@@ -345,10 +384,22 @@ async function handleSyncData(request, db) {
       console.log(`🗑️  Eliminando ${deleted.pedidos.length} pedidos`);
       for (const id of deleted.pedidos) {
         try {
-          await db.prepare('DELETE FROM pedidos WHERE id = ?')
-            .bind(parseInt(id, 10))
-            .run();
-          console.log(`✅ Pedido ${id} eliminado correctamente`);
+          const pedidoId = parseInt(id, 10);
+          console.log(`🗑️  Intentando eliminar pedido con ID: ${pedidoId}`);
+          
+          // Verificar si el pedido existe antes de intentar eliminarlo
+          const { results: pedidoExiste } = await db.prepare('SELECT id FROM pedidos WHERE id = ?')
+            .bind(pedidoId)
+            .all();
+            
+          if (pedidoExiste && pedidoExiste.length > 0) {
+            await db.prepare('DELETE FROM pedidos WHERE id = ?')
+              .bind(pedidoId)
+              .run();
+            console.log(`✅ Pedido ${pedidoId} eliminado correctamente`);
+          } else {
+            console.log(`⚠️  Pedido ${pedidoId} no encontrado, omitiendo...`);
+          }
         } catch (error) {
           console.error(`❌ Error al eliminar pedido ${id}:`, error);
         }
@@ -375,8 +426,6 @@ async function handleSyncData(request, db) {
     );
   }
 }
-
-
 
 async function handleGetSyncData(request, db, url) {
   try {
@@ -435,16 +484,19 @@ async function handleGetSyncData(request, db, url) {
       SELECT 
         id, 
         cliente_id as clienteId,
-        cliente_nombre as cliente,
-        cliente_telefono as telefono,
         titulo, 
         descripcion, 
         fecha_entrega, 
         precio,
         hecho,
-        fecha_hecho
+        fecha_hecho,
+        cliente_nombre,
+        cliente_telefono,
+        '${userId}' as userId,
+        fecha_entrega as createdAt
       FROM pedidos
-    `).all();
+      WHERE userId = ?
+    `).bind(userId).all();
 
     console.log(`📊 Datos encontrados - Clientes: ${clientes.length}, Productos: ${productos.length}, Movimientos: ${movimientos.length}, Pedidos: ${pedidos.length}`);
 
@@ -467,7 +519,7 @@ async function handleGetSyncData(request, db, url) {
           precio: p.precio || 0,
           cantidad: p.cantidad || 0,
           clienteId: p.clienteId,
-          userId: p.userId,
+          userId: p.userId || userId,
           createdAt: p.createdAt || new Date().toISOString()
         })),
         movimientos: movimientos.map(m => ({
@@ -478,21 +530,22 @@ async function handleGetSyncData(request, db, url) {
           fecha: m.fecha || new Date().toISOString(),
           productoId: m.productoId,
           clienteId: m.clienteId,
-          userId: m.userId,
+          userId: m.userId || userId,
           createdAt: m.createdAt || new Date().toISOString()
         })),
         pedidos: pedidos.map(ped => ({
           id: ped.id,
-          cliente: ped.clienteId?.toString() || '',
-          cliente_nombre: ped.cliente || '',
-          cliente_telefono: ped.telefono || '',
+          cliente_id: ped.clienteId?.toString() || '',
+          cliente_nombre: ped.cliente_nombre || '',
+          cliente_telefono: ped.cliente_telefono || '',
           titulo: ped.titulo || '',
           descripcion: ped.descripcion || '',
           fecha_entrega: ped.fecha_entrega || new Date().toISOString(),
           precio: ped.precio || 0,
           hecho: ped.hecho || 0,
           fecha_hecho: ped.fecha_hecho || null,
-          userId: userId
+          userId: ped.userId || userId,
+          createdAt: ped.createdAt || new Date().toISOString()
         }))
       }
     };
@@ -509,7 +562,19 @@ async function handleGetSyncData(request, db, url) {
     );
   } catch (error) {
     console.error('Error al obtener datos de sync:', error);
-    return new Response(JSON.stringify({ error: 'Error al obtener datos', details: error.message }), { status: 500, headers: corsHeaders });
+    return new Response(
+      JSON.stringify({ 
+        error: 'Error al obtener datos de sincronización', 
+        details: error.message 
+      }), 
+      { 
+        status: 500, 
+        headers: { 
+          'Content-Type': 'application/json', 
+          ...corsHeaders 
+        } 
+      }
+    );
   }
 }
 

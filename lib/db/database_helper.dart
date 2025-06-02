@@ -28,7 +28,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 5, // Incremented version to add soft delete support
+      version: 9, // Incremented version to rename productoId to producto_id in movimientos
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -44,7 +44,7 @@ class DatabaseHelper {
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           productoId INTEGER,
           tipo TEXT,
-          cantidad REAL,
+          monto REAL,
           fecha TEXT,
           descripcion TEXT,
           FOREIGN KEY (productoId) REFERENCES productos(id)
@@ -53,9 +53,9 @@ class DatabaseHelper {
     }
     
     if (oldVersion < 5) {
-      // Migración para soporte de borrado lógico
+      // Migración para la versión 5 - Agregar campos de sincronización
       try {
-        // Agregar columnas a la tabla clientes si no existen
+        // Agregar columnas de sincronización a las tablas existentes
         try {
           await db.execute('ALTER TABLE clientes ADD COLUMN eliminado INTEGER DEFAULT 0');
           print('✅ [MIGRACION] Columna "eliminado" agregada a la tabla clientes');
@@ -93,6 +93,164 @@ class DatabaseHelper {
         
       } catch (e, stackTrace) {
         print('❌ [ERROR] Error en migración a versión 5: $e');
+        print('Stack trace: $stackTrace');
+        rethrow;
+      }
+    }
+    
+    if (oldVersion < 6) {
+      // Migración para la versión 6 - Renombrar columna 'cantidad' a 'monto' en la tabla movimientos
+      try {
+        // Verificar si la columna 'cantidad' existe
+        final columns = await db.rawQuery('PRAGMA table_info(movimientos)');
+        final hasCantidad = columns.any((col) => col['name'] == 'cantidad');
+        final hasMonto = columns.any((col) => col['name'] == 'monto');
+        
+        if (hasCantidad && !hasMonto) {
+          // 1. Crear una nueva tabla temporal con la estructura correcta
+          await db.execute('''
+            CREATE TABLE movimientos_new (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              productoId INTEGER,
+              tipo TEXT,
+              monto REAL,
+              fecha TEXT,
+              descripcion TEXT,
+              FOREIGN KEY (productoId) REFERENCES productos(id)
+            );
+          ''');
+          
+          // 2. Copiar los datos de la tabla antigua a la nueva
+          await db.execute('''
+            INSERT INTO movimientos_new (id, productoId, tipo, monto, fecha, descripcion)
+            SELECT id, productoId, tipo, cantidad, fecha, descripcion FROM movimientos;
+          ''');
+          
+          // 3. Eliminar la tabla antigua
+          await db.execute('DROP TABLE movimientos;');
+          
+          // 4. Renombrar la nueva tabla
+          await db.execute('ALTER TABLE movimientos_new RENAME TO movimientos;');
+          
+          print('✅ [MIGRACION] Columna "cantidad" renombrada a "monto" en la tabla movimientos');
+        } else if (hasMonto) {
+          print('ℹ️ [MIGRACION] La columna "monto" ya existe en la tabla movimientos');
+        } else {
+          print('ℹ️ [MIGRACION] No se encontró la columna "cantidad" en la tabla movimientos');
+        }
+      } catch (e, stackTrace) {
+        print('❌ [ERROR] Error en migración a versión 6: $e');
+        print('Stack trace: $stackTrace');
+        rethrow;
+      }
+    }
+    
+    
+    if (oldVersion < 7) {
+      // Migración para la versión 7 - Agregar columnas a la tabla productos
+      try {
+        // Verificar si las columnas ya existen
+        final columns = await db.rawQuery('PRAGMA table_info(productos)');
+        final hasDescripcion = columns.any((col) => col['name'] == 'descripcion');
+        final hasFechaCreacion = columns.any((col) => col['name'] == 'fecha_creacion');
+        
+        if (!hasDescripcion) {
+          await db.execute('ALTER TABLE productos ADD COLUMN descripcion TEXT');
+          print('✅ [MIGRACION] Columna "descripcion" agregada a la tabla productos');
+        } else {
+          print('ℹ️ [MIGRACION] La columna "descripcion" ya existe en la tabla productos');
+        }
+        
+        if (!hasFechaCreacion) {
+          await db.execute('ALTER TABLE productos ADD COLUMN fecha_creacion TEXT');
+          print('✅ [MIGRACION] Columna "fecha_creacion" agregada a la tabla productos');
+        } else {
+          print('ℹ️ [MIGRACION] La columna "fecha_creacion" ya existe en la tabla productos');
+        }
+        
+      } catch (e, stackTrace) {
+        print('❌ [ERROR] Error en migración a versión 7: $e');
+        print('Stack trace: $stackTrace');
+        rethrow;
+      }
+    }
+    
+    if (oldVersion < 8) {
+      // Migración para la versión 8 - Agregar campos a productos
+      try {
+        // Verificar si las columnas ya existen
+        final columns = await db.rawQuery('PRAGMA table_info(productos)');
+        final hasDescripcion = columns.any((col) => col['name'] == 'descripcion');
+        final hasFechaCreacion = columns.any((col) => col['name'] == 'fecha_creacion');
+        
+        if (!hasDescripcion) {
+          await db.execute('ALTER TABLE productos ADD COLUMN descripcion TEXT');
+          print('✅ [MIGRACION] Columna "descripcion" agregada a la tabla productos');
+        } else {
+          print('ℹ️ [MIGRACION] La columna "descripcion" ya existe en la tabla productos');
+        }
+        
+        if (!hasFechaCreacion) {
+          await db.execute('ALTER TABLE productos ADD COLUMN fecha_creacion TEXT');
+          print('✅ [MIGRACION] Columna "fecha_creacion" agregada a la tabla productos');
+        } else {
+          print('ℹ️ [MIGRACION] La columna "fecha_creacion" ya existe en la tabla productos');
+        }
+      } catch (e, stackTrace) {
+        print('❌ [ERROR] Error en migración a versión 8: $e');
+        print('Stack trace: $stackTrace');
+        rethrow;
+      }
+    }
+    
+    if (oldVersion < 9) {
+      // Migración para la versión 9 - Renombrar productoId a producto_id en movimientos
+      try {
+        // Verificar si la tabla movimientos existe
+        final tables = await db.rawQuery(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name='movimientos'"
+        );
+        
+        if (tables.isNotEmpty) {
+          // Verificar si la columna productoId existe
+          final columns = await db.rawQuery('PRAGMA table_info(movimientos)');
+          final hasProductoId = columns.any((col) => col['name'] == 'productoId');
+          
+          if (hasProductoId) {
+            // Crear una tabla temporal con el nuevo esquema
+            await db.execute('''
+              CREATE TABLE movimientos_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                producto_id INTEGER,
+                tipo TEXT,
+                monto REAL,
+                fecha TEXT,
+                descripcion TEXT,
+                FOREIGN KEY (producto_id) REFERENCES productos(id)
+              );
+            ''');
+            
+            // Copiar los datos de la tabla antigua a la nueva
+            await db.execute('''
+              INSERT INTO movimientos_new (id, producto_id, tipo, monto, fecha, descripcion)
+              SELECT id, productoId, tipo, monto, fecha, descripcion FROM movimientos
+            ''');
+            
+            // Eliminar la tabla antigua
+            await db.execute('DROP TABLE movimientos');
+            
+            // Renombrar la nueva tabla
+            await db.execute('ALTER TABLE movimientos_new RENAME TO movimientos');
+            
+            print('✅ [MIGRACION] Columna "productoId" renombrada a "producto_id" en la tabla movimientos');
+          } else {
+            print('ℹ️ [MIGRACION] La columna "productoId" no existe en la tabla movimientos');
+          }
+        } else {
+          print('ℹ️ [MIGRACION] La tabla movimientos no existe, no es necesaria la migración');
+        }
+      } catch (e, stackTrace) {
+        print('❌ [ERROR] Error en migración a versión 9: $e');
         print('Stack trace: $stackTrace');
         rethrow;
       }
@@ -137,21 +295,23 @@ class DatabaseHelper {
       CREATE TABLE productos (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         nombre TEXT,
-        clienteId INTEGER,
+        cliente_id INTEGER,
         deuda REAL,
-        FOREIGN KEY (clienteId) REFERENCES clientes(id)
+        descripcion TEXT,
+        fecha_creacion TEXT,
+        FOREIGN KEY (cliente_id) REFERENCES clientes(id)
       );
     ''');
 
     await db.execute('''
       CREATE TABLE movimientos (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        productoId INTEGER,
+        producto_id INTEGER,
         tipo TEXT,
-        cantidad REAL,
+        monto REAL,
         fecha TEXT,
         descripcion TEXT,
-        FOREIGN KEY (productoId) REFERENCES productos(id)
+        FOREIGN KEY (producto_id) REFERENCES productos(id)
       );
     ''');
 
@@ -230,37 +390,92 @@ class DatabaseHelper {
 
   // --------- MÉTODOS CLIENTES ---------
   Future<int> insertCliente(Cliente cliente) async {
+    Database? db;
     try {
       print('🔄 [DEBUG] Iniciando insertCliente');
       print('   - Nombre: ${cliente.nombre}');
       print('   - Teléfono: ${cliente.telefono}');
       
-      final db = await instance.database;
+      db = await instance.database;
       print('   - Base de datos obtenida');
       
-      final map = cliente.toMap();
-      print('   - Mapa del cliente: $map');
+      // Iniciar una transacción
+      await db.transaction((txn) async {
+        // Insertar el cliente
+        final map = cliente.toMap();
+        print('   - Mapa del cliente: $map');
+        
+        final id = await txn.insert('clientes', map);
+        print('✅ [DEBUG] Cliente insertado con ID: $id');
+        
+        // Crear un producto de "Cuenta Principal" para el cliente
+        final productoPrincipal = Producto(
+          clienteId: id.toString(),
+          nombre: 'Cuenta Principal',
+          descripcion: 'Producto principal para registrar movimientos generales',
+          fechaCreacion: DateTime.now().toIso8601String(),
+        );
+        
+        print('🔄 [DEBUG] Creando producto de Cuenta Principal');
+        await txn.insert('productos', productoPrincipal.toMap());
+        print('✅ [DEBUG] Producto "Cuenta Principal" creado para el cliente ID: $id');
+        
+        // Verificar que el cliente se haya guardado correctamente
+        final clienteGuardado = await txn.query(
+          'clientes',
+          where: 'id = ?',
+          whereArgs: [id],
+        );
+        
+        if (clienteGuardado.isNotEmpty) {
+          print('✅ [DEBUG] Cliente verificado en la base de datos: ${clienteGuardado.first}');
+        } else {
+          print('⚠️ [WARNING] No se pudo verificar el cliente en la base de datos');
+        }
+        
+        return id;
+      });
       
-      final id = await db.insert('clientes', map);
-      print('✅ [DEBUG] Cliente insertado con ID: $id');
-      
-      // Verificar que el cliente se haya guardado correctamente
-      final clienteGuardado = await db.query(
+      // Si llegamos aquí, la transacción fue exitosa
+      final clienteExistente = await db.query(
         'clientes',
-        where: 'id = ?',
-        whereArgs: [id],
+        where: 'telefono = ?',
+        whereArgs: [cliente.telefono],
       );
       
-      if (clienteGuardado.isNotEmpty) {
-        print('✅ [DEBUG] Cliente verificado en la base de datos: ${clienteGuardado.first}');
+      if (clienteExistente.isNotEmpty) {
+        print('✅ [DEBUG] Cliente confirmado en la base de datos con ID: ${clienteExistente.first['id']}');
+        return clienteExistente.first['id'] as int;
       } else {
-        print('⚠️ [WARNING] No se pudo verificar el cliente en la base de datos');
+        throw Exception('No se pudo confirmar la creación del cliente');
       }
-      
-      return id;
     } catch (e, stackTrace) {
       print('❌ [ERROR] Error en insertCliente: $e');
       print('Stack trace: $stackTrace');
+      
+      // No intentamos recuperarnos automáticamente ya que podría causar duplicados
+      // Si hay un error, lo mejor es que falle la operación completa
+      // y que el usuario lo intente de nuevo
+      
+      // Si el cliente se quedó en un estado inconsistente, el usuario deberá eliminarlo manualmente
+      if (db != null) {
+        try {
+          final clienteExistente = await db.query(
+            'clientes',
+            where: 'telefono = ?',
+            whereArgs: [cliente.telefono],
+          );
+          
+          if (clienteExistente.isNotEmpty) {
+            final clienteId = clienteExistente.first['id'] as int;
+            print('⚠️ [WARNING] Cliente puede haber quedado en estado inconsistente. ID: $clienteId');
+            // No intentamos crear el producto aquí para evitar duplicados
+          }
+        } catch (e2) {
+          print('❌ [ERROR] Error al verificar el estado del cliente: $e2');
+        }
+      }
+      
       rethrow;
     }
   }
@@ -357,24 +572,74 @@ class DatabaseHelper {
 
   // --------- MÉTODOS PRODUCTOS ---------
   Future<int> insertProducto(Producto producto) async {
-    final db = await instance.database;
-    return await db.insert('productos', producto.toMap());
+    try {
+      print('🔄 [DEBUG] Insertando producto para cliente_id: ${producto.clienteId}');
+      final db = await instance.database;
+      final map = producto.toMap();
+      print('   - Mapa del producto: $map');
+      final id = await db.insert('productos', map);
+      print('✅ [DEBUG] Producto insertado con ID: $id');
+      return id;
+    } catch (e, stackTrace) {
+      print('❌ [ERROR] Error en insertProducto: $e');
+      print('Stack trace: $stackTrace');
+      rethrow;
+    }
   }
 
   Future<List<Producto>> getProductosPorCliente(int clienteId) async {
-    final db = await instance.database;
-    final result = await db.query('productos', where: 'clienteId = ?', whereArgs: [clienteId]);
-    return result.map((json) => Producto.fromMap(json)).toList();
+    try {
+      print('🔄 [DEBUG] Obteniendo productos para cliente_id: $clienteId');
+      final db = await instance.database;
+      final result = await db.query(
+        'productos', 
+        where: 'cliente_id = ?', 
+        whereArgs: [clienteId]
+      );
+      print('✅ [DEBUG] Productos encontrados: ${result.length}');
+      return result.map((json) => Producto.fromMap(json)).toList();
+    } catch (e, stackTrace) {
+      print('❌ [ERROR] Error en getProductosPorCliente: $e');
+      print('Stack trace: $stackTrace');
+      rethrow;
+    }
   }
 
   Future<int> updateProducto(Producto producto) async {
-    final db = await instance.database;
-    return await db.update('productos', producto.toMap(), where: 'id = ?', whereArgs: [producto.id]);
+    try {
+      print('🔄 [DEBUG] Actualizando producto ID: ${producto.id}');
+      final db = await instance.database;
+      final result = await db.update(
+        'productos', 
+        producto.toMap(), 
+        where: 'id = ?', 
+        whereArgs: [producto.id]
+      );
+      print('✅ [DEBUG] Producto actualizado: $result filas afectadas');
+      return result;
+    } catch (e, stackTrace) {
+      print('❌ [ERROR] Error en updateProducto: $e');
+      print('Stack trace: $stackTrace');
+      rethrow;
+    }
   }
 
   Future<int> eliminarProducto(String id) async {
-    final db = await instance.database;
-    return await db.delete('productos', where: 'id = ?', whereArgs: [id]);
+    try {
+      print('🔄 [DEBUG] Eliminando producto ID: $id');
+      final db = await instance.database;
+      final result = await db.delete(
+        'productos', 
+        where: 'id = ?', 
+        whereArgs: [id]
+      );
+      print('✅ [DEBUG] Producto eliminado: $result filas afectadas');
+      return result;
+    } catch (e, stackTrace) {
+      print('❌ [ERROR] Error en eliminarProducto: $e');
+      print('Stack trace: $stackTrace');
+      rethrow;
+    }
   }
 
   // --------- MÉTODOS MOVIMIENTOS ---------
@@ -419,7 +684,7 @@ class DatabaseHelper {
       // Obtener solo los del producto solicitado
       final result = await db.query(
         'movimientos', 
-        where: 'productoId = ?', 
+        where: 'producto_id = ?', 
         whereArgs: [productoId],
         orderBy: 'fecha DESC',
       );
@@ -468,6 +733,34 @@ class DatabaseHelper {
     final db = await instance.database;
     final result = await db.query('pedidos');
     return result.map((json) => Pedido.fromMap(json)).toList();
+  }
+
+  Future<List<Pedido>> getPedidosPorCliente(int clienteId) async {
+    try {
+      print('🔍 [DEBUG] Buscando pedidos para clienteId: $clienteId');
+      final db = await instance.database;
+      
+      // Verificar si la tabla existe
+      final tables = await db.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='pedidos'"
+      );
+      print('📊 [DEBUG] Tabla pedidos existe: ${tables.isNotEmpty}');
+      
+      // Obtener los pedidos del cliente
+      final result = await db.query(
+        'pedidos', 
+        where: 'cliente_id = ?', 
+        whereArgs: [clienteId],
+        orderBy: 'fecha_entrega ASC',
+      );
+      
+      print('✅ [DEBUG] Pedidos encontrados: ${result.length}');
+      return result.map((json) => Pedido.fromMap(json)).toList();
+    } catch (e, stackTrace) {
+      print('❌ [ERROR] Error al obtener pedidos: $e');
+      print('Stack trace: $stackTrace');
+      rethrow;
+    }
   }
 
   // --------- MÉTODOS GASTOS ---------

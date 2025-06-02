@@ -16,28 +16,27 @@ class Movimiento {
   });
 
   Map<String, dynamic> toMap() {
+    final productoIdInt = int.tryParse(productoId) ?? 0;
     return {
       'id': id != null ? int.tryParse(id!) : null,
-      'productoId': int.tryParse(productoId),
+      'producto_id': productoIdInt, // Use only snake_case for database
       'fecha': fecha,
       'tipo': tipo,
-      'cantidad': monto, // Using 'cantidad' to match the database schema
+      'monto': monto,
       'descripcion': descripcion,
     };
   }
 
   factory Movimiento.fromMap(Map<String, dynamic> map) {
     try {
-      // Handle both snake_case and camelCase field names
-      final productoId = map['productoId'] ?? map['producto_id'] ?? 0;
+      // Handle both snake_case and camelCase field names for productoId
+      final productoId = (map['productoId'] ?? map['producto_id'] ?? 0).toString();
+      
       // Handle both 'monto' and 'cantidad' fields
-      final monto = map['monto'] ?? map['cantidad'] ?? 0.0;
+      final monto = (map['monto'] ?? map['cantidad'] ?? 0.0).toDouble();
       
       // Ensure id is properly handled whether it comes as int or String
       final id = map['id']?.toString();
-      
-      // Ensure productoId is a String
-      final productoIdStr = productoId.toString();
       
       // Ensure fecha is a valid string
       String fecha;
@@ -63,7 +62,7 @@ class Movimiento {
       
       return Movimiento(
         id: id,
-        productoId: productoIdStr,
+        productoId: productoId, // Usar la variable productoId que ya tenemos
         fecha: fecha,
         tipo: tipo,
         monto: montoFinal,
