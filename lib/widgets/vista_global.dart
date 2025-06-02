@@ -45,7 +45,16 @@ class VistaGlobal extends StatelessWidget {
         Expanded(
           child: ListView(
             children: saldosPorProducto.entries.map((entry) {
-              final producto = productos.firstWhere((p) => p.id == entry.key);
+              final producto = productos.firstWhere(
+                (p) => p.id == entry.key.toString(),
+                orElse: () => Producto(
+                  id: entry.key.toString(),
+                  nombre: 'Producto ${entry.key}',
+                  clienteId: '',
+                  descripcion: 'Producto no encontrado',
+                  fechaCreacion: '',
+                ),
+              );
               return Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: ListTile(
