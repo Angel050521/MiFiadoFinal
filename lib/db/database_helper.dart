@@ -437,16 +437,35 @@ class DatabaseHelper {
       });
       
       // Si llegamos aquí, la transacción fue exitosa
-      final clienteExistente = await db.query(
+      // Obtener el ID del cliente recién insertado
+      final clienteInsertado = await db.query(
         'clientes',
-        where: 'telefono = ?',
-        whereArgs: [cliente.telefono],
+        where: 'rowid = last_insert_rowid()',
       );
       
-      if (clienteExistente.isNotEmpty) {
-        print('✅ [DEBUG] Cliente confirmado en la base de datos con ID: ${clienteExistente.first['id']}');
-        return clienteExistente.first['id'] as int;
+      if (clienteInsertado.isNotEmpty) {
+        final clienteId = clienteInsertado.first['id'] as int;
+        print('✅ [DEBUG] Cliente confirmado en la base de datos con ID: $clienteId');
+        return clienteId;
       } else {
+        // Si no se encuentra por last_insert_rowid, intentar por teléfono solo si no está vacío
+        if (cliente.telefono.isNotEmpty) {
+          final porTelefono = await db.query(
+            'clientes',
+            where: 'telefono = ?',
+            whereArgs: [cliente.telefono],
+            orderBy: 'id DESC',
+            limit: 1,
+          );
+          
+          if (porTelefono.isNotEmpty) {
+            final clienteId = porTelefono.first['id'] as int;
+            print('✅ [DEBUG] Cliente confirmado por teléfono con ID: $clienteId');
+            return clienteId;
+          }
+        }
+        
+        // Si llegamos aquí, no se pudo confirmar la creación
         throw Exception('No se pudo confirmar la creación del cliente');
       }
     } catch (e, stackTrace) {
@@ -460,16 +479,33 @@ class DatabaseHelper {
       // Si el cliente se quedó en un estado inconsistente, el usuario deberá eliminarlo manualmente
       if (db != null) {
         try {
-          final clienteExistente = await db.query(
-            'clientes',
-            where: 'telefono = ?',
-            whereArgs: [cliente.telefono],
-          );
+          // Primero buscar por ID si está disponible
+          if (cliente.id != null && cliente.id!.isNotEmpty) {
+            final clienteExistente = await db.query(
+              'clientes',
+              where: 'id = ?',
+              whereArgs: [cliente.id],
+            );
+            
+            if (clienteExistente.isNotEmpty) {
+              final clienteId = clienteExistente.first['id'] as int;
+              print('⚠️ [WARNING] Cliente puede haber quedado en estado inconsistente. ID: $clienteId');
+              return clienteId; // Devolver el ID del cliente inconsistente
+            }
+          }
           
-          if (clienteExistente.isNotEmpty) {
-            final clienteId = clienteExistente.first['id'] as int;
-            print('⚠️ [WARNING] Cliente puede haber quedado en estado inconsistente. ID: $clienteId');
-            // No intentamos crear el producto aquí para evitar duplicados
+          // Si no se encontró por ID o no hay ID, intentar por teléfono si no está vacío
+          if (cliente.telefono.isNotEmpty) {
+            final clientePorTelefono = await db.query(
+              'clientes',
+              where: 'telefono = ?',
+              whereArgs: [cliente.telefono],
+            );
+            
+            if (clientePorTelefono.isNotEmpty) {
+              final clienteId = clientePorTelefono.first['id'] as int;
+              print('⚠️ [WARNING] Cliente puede haber quedado en estado inconsistente (búsqueda por teléfono). ID: $clienteId');
+            }
           }
         } catch (e2) {
           print('❌ [ERROR] Error al verificar el estado del cliente: $e2');

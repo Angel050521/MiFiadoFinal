@@ -52,7 +52,7 @@ class VistaGlobal extends StatelessWidget {
                   nombre: 'Producto ${entry.key}',
                   clienteId: '',
                   descripcion: 'Producto no encontrado',
-                  fechaCreacion: '',
+                  fechaCreacion: '',  
                 ),
               );
               return Padding(

@@ -280,12 +280,11 @@ class NubeService {
       return {'success': false, 'error': error};
     } catch (e, stackTrace) {
       final error = 'Error inesperado en sincronizarConNube: $e\n$stackTrace';
-      print('❌ $error');
       return {'success': false, 'error': 'Error al sincronizar: ${e.toString()}'};
     }
   }
 
-  // Función para realizar la petición HTTP en un aisolado separado
+  // Función para realizar la petición HTTP en un aislado separado
   static Future<http.Response> _fetchDataInIsolate(Map<String, dynamic> params) async {
     final Uri url = params['url'];
     final Map<String, String> headers = Map<String, String>.from(params['headers']);
@@ -293,9 +292,68 @@ class NubeService {
     final client = http.Client();
     try {
       final response = await client.get(url, headers: headers);
+      
+      // Asegurarse de que los bytes se decodifiquen correctamente
+      if (response.bodyBytes != null && response.bodyBytes.isNotEmpty) {
+        try {
+          // Decodificar y volver a codificar para asegurar UTF-8 válido
+          final body = utf8.decode(
+            response.bodyBytes,
+            allowMalformed: false,
+          );
+          
+          return http.Response.bytes(
+            utf8.encode(body),
+            response.statusCode,
+            request: response.request,
+            headers: response.headers,
+            isRedirect: response.isRedirect,
+            persistentConnection: response.persistentConnection,
+            reasonPhrase: response.reasonPhrase,
+          );
+        } catch (e) {
+          print('⚠️ [DEBUG] Error al decodificar la respuesta: $e');
+          // Si falla, devolver la respuesta original
+        }
+      }
+      
       return response;
+    } catch (e) {
+      print('❌ [DEBUG] Error en _fetchDataInIsolate: $e');
+      rethrow;
     } finally {
       client.close();
+    }
+  }
+  
+  // Función auxiliar para limpiar cadenas JSON
+  static String _cleanJsonString(String input) {
+    if (input.isEmpty) return input;
+    
+    try {
+      // Primero intentar decodificar/recodificar para normalizar
+      final bytes = utf8.encode(input);
+      String cleaned = utf8.decode(bytes, allowMalformed: false);
+      
+      // Reemplazar caracteres de control y BOM
+      cleaned = cleaned.replaceAll(RegExp(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\uFEFF]'), '');
+      
+      // Reemplazar caracteres problemáticos comunes
+      cleaned = cleaned
+          .replaceAll('Ã¡', 'á')
+          .replaceAll('Ã©', 'é')
+          .replaceAll('Ã-', 'í')
+          .replaceAll('Ã³', 'ó')
+          .replaceAll('Ãº', 'ú')
+          .replaceAll('Ã±', 'ñ')
+          .replaceAll('Ã', 'í') // Para casos como 'Ã' que deberían ser 'í'
+          .replaceAll('Â', ''); // Caracteres adicionales que pueden aparecer
+      
+      return cleaned;
+    } catch (e) {
+      print('⚠️ [DEBUG] Error al limpiar cadena: $e');
+      // Si falla, devolver la entrada original sin caracteres de control
+      return input.replaceAll(RegExp(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\uFEFF]'), '');
     }
   }
 
@@ -309,7 +367,7 @@ class NubeService {
     print('🌐 [DEBUG] URL: $url');
 
     try {
-      print('🔑 [DEBUG] Token de autenticación: ${token.isNotEmpty ? '***${token.substring(token.length - 4)}' : 'vacío'}');
+      print('🔑 [DEBUG] Token de autenticación: ${token.isNotEmpty ? '***${token.substring(token.length - 4)}' : 'vacío'}' );
       
       final stopwatch = Stopwatch()..start();
       print('⏱️ [DEBUG] Realizando petición HTTP en aislado...');
@@ -320,8 +378,10 @@ class NubeService {
         {
           'url': url,
           'headers': {
-            'Content-Type': 'application/json',
+            'Content-Type': 'application/json; charset=utf-8',
             'Authorization': 'Bearer $token',
+            'Accept': 'application/json; charset=utf-8',
+            'Accept-Charset': 'utf-8',
           },
         },
       ).timeout(
@@ -337,16 +397,19 @@ class NubeService {
       print('📥 [DEBUG] Respuesta del servidor (${response.statusCode})');
       print('📄 [DEBUG] Headers: ${response.headers}');
       
+      // Decodificar el cuerpo como UTF-8
+      final String responseBody = utf8.decode(response.bodyBytes);
+      
       // Mostrar solo el inicio del body para no saturar los logs
-      final bodyPreview = response.body.length > 500 
-          ? '${response.body.substring(0, 500)}... (${response.body.length} bytes en total)'
-          : response.body;
+      final bodyPreview = responseBody.length > 500 
+          ? '${responseBody.substring(0, 500)}... (${responseBody.length} bytes en total)'
+          : responseBody;
       print('📄 [DEBUG] Body: $bodyPreview');
 
       if (response.statusCode == 200) {
         try {
           print('🔄 [DEBUG] Procesando respuesta JSON...');
-          final dynamic decodedBody = jsonDecode(response.body);
+          final dynamic decodedBody = jsonDecode(responseBody);
           
           if (decodedBody is! Map<String, dynamic>) {
             throw const FormatException('Formato de respuesta inválido: se esperaba un objeto JSON');
@@ -371,10 +434,29 @@ class NubeService {
             throw const FormatException('Datos de respuesta faltantes en la respuesta del servidor');
           }
           
+          // Función para limpiar cadenas en los datos
+          T _cleanData<T>(T data) {
+            if (data is Map) {
+              return Map<String, dynamic>.fromEntries(
+                (data as Map).entries.map((e) => 
+                  MapEntry(e.key.toString(), _cleanData(e.value))
+                )
+              ) as T;
+            } else if (data is List) {
+              return (data as List).map((e) => _cleanData(e)).toList() as T;
+            } else if (data is String) {
+              return _cleanJsonString(data) as T;
+            }
+            return data;
+          }
+          
+          // Limpiar los datos recibidos
+          final cleanedData = _cleanData(responseData);
+          
           // Asegurarse de que todos los campos esperados estén presentes
-          final clientes = responseData['clientes'] is List ? responseData['clientes'] : [];
-          final productos = responseData['productos'] is List ? responseData['productos'] : [];
-          final movimientos = responseData['movimientos'] is List ? responseData['movimientos'] : [];
+          final clientes = cleanedData['clientes'] is List ? cleanedData['clientes'] : [];
+          final productos = cleanedData['productos'] is List ? cleanedData['productos'] : [];
+          final movimientos = cleanedData['movimientos'] is List ? cleanedData['movimientos'] : [];
           
           print('✅ [DEBUG] Datos procesados correctamente:');
           print('  - Clientes: ${clientes.length}');

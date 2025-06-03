@@ -249,14 +249,27 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
   }
 
   Future<void> _sincronizarSiEsPremium() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('token') ?? '';
-    final userId = prefs.getString('userId') ?? '';
-    final plan = prefs.getString('plan') ?? '';
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token') ?? '';
+      final userId = prefs.getString('userId') ?? '';
+      final plan = prefs.getString('plan') ?? 'free';
 
-    if (token.isEmpty || userId.isEmpty || (plan != 'premium' && plan != 'nube')) return;
+      print('🔍 [DEBUG] Verificando sincronización para plan: $plan');
+      
+      // Verificar si el usuario tiene un plan que permita sincronización
+      if (token.isEmpty || userId.isEmpty || plan == 'free') {
+        print('ℹ️ [INFO] Sincronización no requerida para el plan: $plan');
+        return;
+      }
 
-    await SyncHelper.sincronizarSiConectado(userId: userId, token: token);
+      print('🔄 [DEBUG] Iniciando sincronización para plan: $plan');
+      await SyncHelper.sincronizarSiConectado(userId: userId, token: token);
+      print('✅ [DEBUG] Sincronización completada para plan: $plan');
+    } catch (e) {
+      print('❌ [ERROR] Error en _sincronizarSiEsPremium: $e');
+      // No lanzar la excepción para no interrumpir el flujo principal
+    }
   }
 
   @override
