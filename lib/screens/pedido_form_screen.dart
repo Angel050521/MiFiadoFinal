@@ -127,34 +127,96 @@ class _PedidoFormScreenState extends State<PedidoFormScreen> {
       hecho: widget.pedido?.hecho ?? false,
     );
 
-    if (widget.pedido == null) {
+    bool esNuevo = widget.pedido == null;
+    
+    Pedido pedidoGuardado;
+    
+    if (esNuevo) {
       print('➕ [PEDIDO] Insertando nuevo pedido en la base de datos local');
       final id = await _db.insertPedido(nuevo);
-        print('✅ [PEDIDO] Pedido insertado con éxito. ID asignado: $id');
+      // Crear una nueva instancia con el ID asignado
+      pedidoGuardado = Pedido(
+        id: id.toString(),
+        cliente: nuevo.cliente,
+        telefono: nuevo.telefono,
+        titulo: nuevo.titulo,
+        descripcion: nuevo.descripcion,
+        fechaEntrega: nuevo.fechaEntrega,
+        precio: nuevo.precio,
+        hecho: nuevo.hecho,
+        fechaHecho: nuevo.fechaHecho,
+      );
+      print('✅ [PEDIDO] Pedido insertado con éxito. ID asignado: $id');
     } else {
       print('🔄 [PEDIDO] Actualizando pedido existente ID: ${nuevo.id}');
       final rowsAffected = await _db.updatePedido(nuevo);
+      pedidoGuardado = nuevo; // Usar el pedido existente ya actualizado
       print('✅ [PEDIDO] Pedido actualizado. Filas afectadas: $rowsAffected');
     }
 
-    // Marcar como pendiente de sincronización
-    print('🔄 [SINCRONIZAR] Marcando sincronización como pendiente');
-    await SyncHelper.marcarPendiente();
-    
-    // Intentar sincronizar si hay conexión
+    // Obtener credenciales para sincronización
     final prefs = await SharedPreferences.getInstance();
     final userId = prefs.getString('userId');
     final token = prefs.getString('token');
     
-    if (userId != null && token != null) {
-      print('🔄 [SINCRONIZAR] Intentando sincronizar con la nube...');
-      try {
-        await SyncHelper.sincronizarSiConectado(userId: userId, token: token);
-        print('✅ [SINCRONIZAR] Sincronización completada exitosamente');
-      } catch (e) {
-        print('⚠️ [SINCRONIZAR] Error durante la sincronización: $e');
-        // No hacemos nada, la sincronización se intentará en el próximo inicio
+    if (userId != null && token != null && token.isNotEmpty) {
+      if (esNuevo) {
+        // Para pedidos nuevos, intentar sincronizar inmediatamente
+        print('🚀 [SINCRONIZAR] Sincronizando pedido inmediatamente...');
+        try {
+          final sincronizado = await SyncHelper.sincronizarPedido(pedidoGuardado, token);
+          if (sincronizado) {
+            print('✅ [SINCRONIZAR] Pedido sincronizado correctamente');
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Pedido guardado y sincronizado correctamente'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+            }
+          } else {
+            // Si falla, marcar como pendiente
+            print('⚠️ [SINCRONIZAR] No se pudo sincronizar el pedido, marcando como pendiente');
+            await SyncHelper.marcarPendiente();
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Pedido guardado localmente. Se sincronizará más tarde.'),
+                  backgroundColor: Colors.orange,
+                ),
+              );
+            }
+          }
+        } catch (e) {
+          print('❌ [SINCRONIZAR] Error al sincronizar pedido: $e');
+          await SyncHelper.marcarPendiente();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Error al sincronizar: $e'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+      } else {
+        // Para actualizaciones, marcar como pendiente y sincronizar en segundo plano
+        print('🔄 [SINCRONIZAR] Marcando sincronización como pendiente');
+        await SyncHelper.marcarPendiente();
+        
+        // Intentar sincronización completa en segundo plano
+        try {
+          await SyncHelper.sincronizarSiConectado(userId: userId, token: token);
+          print('✅ [SINCRONIZAR] Sincronización completada exitosamente');
+        } catch (e) {
+          print('⚠️ [SINCRONIZAR] Error durante la sincronización: $e');
+          // La sincronización se intentará en el próximo inicio
+        }
       }
+    } else {
+      print('⚠️ [SINCRONIZAR] No hay credenciales de usuario, marcando como pendiente');
+      await SyncHelper.marcarPendiente();
     }
 
     print('🏁 [PEDIDO] Guardado completado, cerrando formulario');

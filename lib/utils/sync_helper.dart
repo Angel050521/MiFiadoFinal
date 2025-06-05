@@ -4,13 +4,47 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/nube_service.dart';
 import '../services/conexion_service.dart';
 import '../db/database_helper.dart';
-import '../models/Cliente.dart';
-import '../models/Producto.dart';
-import '../models/Movimiento.dart';
+import '../models/cliente.dart';
+import '../models/producto.dart';
+import '../models/movimiento.dart';
+import '../models/pedido.dart';
 
 class SyncHelper {
   static const _pendienteKey = 'pendiente_sincronizacion';
   static const _lastSyncKey = 'last_sync';
+
+  static Future<bool> sincronizarPedido(Pedido pedido, String token) async {
+    try {
+      print('🔄 [SYNC] Iniciando sincronización de pedido ${pedido.id}');
+      final nubeService = NubeService();
+      
+      // Obtener el userId del SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getString('userId');
+      
+      if (userId == null || userId.isEmpty) {
+        print('❌ [SYNC] No se pudo obtener el userId');
+        return false;
+      }
+      
+      final response = await nubeService.sincronizarDatos(
+        userId: userId,
+        token: token,
+        pedidos: [pedido.toMap()],
+      );
+      
+      if (response['success'] == true) {
+        print('✅ [SYNC] Pedido ${pedido.id} sincronizado exitosamente');
+        return true;
+      } else {
+        print('❌ [SYNC] Error al sincronizar pedido: ${response['message']}');
+        return false;
+      }
+    } catch (e) {
+      print('❌ [SYNC] Error al sincronizar pedido: $e');
+      return false;
+    }
+  }
 
   static Future<void> marcarPendiente() async {
     final prefs = await SharedPreferences.getInstance();

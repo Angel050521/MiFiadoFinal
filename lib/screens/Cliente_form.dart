@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../db/database_helper.dart';
-import '../models/Cliente.dart';
-import '../models/Producto.dart';
+import '../models/cliente.dart';
+import '../models/producto.dart';
 import '../utils/sync_helper.dart';
 
 class ClienteFormScreen extends StatefulWidget {

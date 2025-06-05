@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../db/database_helper.dart';
-import '../models/Movimiento.dart';
-import '../models/Cliente.dart';
+import '../models/movimiento.dart';
+import '../models/cliente.dart';
 import '../models/gasto.dart';
 
 class ResumenScreen extends StatefulWidget {

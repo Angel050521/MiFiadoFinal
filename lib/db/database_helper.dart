@@ -1,10 +1,9 @@
 import 'dart:async';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
-
-import '../models/Cliente.dart';
-import '../models/Producto.dart';
-import '../models/Movimiento.dart';
+import '../models/cliente.dart';
+import '../models/producto.dart';
+import '../models/movimiento.dart';
 import '../models/pedido.dart';
 import '../models/gasto.dart';
 

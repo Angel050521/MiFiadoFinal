@@ -6,8 +6,73 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
+import 'package:fiado/models/pedido.dart';
 
 class NubeService {
+  Future<Map<String, dynamic>> sincronizarDatos({
+    required String userId,
+    required String token,
+    List<Map<String, dynamic>>? clientes,
+    List<Map<String, dynamic>>? productos,
+    List<Map<String, dynamic>>? movimientos,
+    List<Map<String, dynamic>>? pedidos,
+    Map<String, dynamic>? deleted,
+  }) async {
+    try {
+      final url = Uri.parse('$baseUrl/api/sync');
+      
+      final data = {
+        'userId': userId,
+        'clientes': clientes ?? [],
+        'productos': productos ?? [],
+        'movimientos': movimientos ?? [],
+        'pedidos': pedidos ?? [],
+        'deleted': deleted ?? {},
+      };
+
+      print('📤 [NubeService] Enviando datos a sincronizar:');
+      print('   - Clientes: ${clientes?.length ?? 0}');
+      print('   - Productos: ${productos?.length ?? 0}');
+      print('   - Movimientos: ${movimientos?.length ?? 0}');
+      print('   - Pedidos: ${pedidos?.length ?? 0}');
+
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json; charset=UTF-8',
+          'Authorization': 'Bearer $token',
+          'X-User-ID': userId,
+        },
+        body: jsonEncode(data),
+      ).timeout(const Duration(seconds: 30));
+
+      final responseData = jsonDecode(utf8.decode(response.bodyBytes));
+      
+      if (response.statusCode == 200) {
+        print('✅ [NubeService] Datos sincronizados exitosamente');
+        return {
+          'success': true,
+          'message': 'Datos sincronizados correctamente',
+          ...responseData,
+        };
+      } else {
+        print('❌ [NubeService] Error al sincronizar: ${response.statusCode} - ${response.body}');
+        return {
+          'success': false,
+          'message': 'Error al sincronizar con el servidor',
+          'statusCode': response.statusCode,
+          'error': responseData['error'] ?? response.body,
+        };
+      }
+    } catch (e) {
+      print('❌ [NubeService] Error en sincronizarDatos: $e');
+      return {
+        'success': false,
+        'message': 'Error de conexión: $e',
+      };
+    }
+  }
+
   static const String baseUrl = 'https://fiadosync.angel050521.workers.dev';
 
   /// 🔄 Actualiza el plan de un usuario en la nube

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../models/Movimiento.dart';
+import '../models/movimiento.dart';
 
 class MovimientoList extends StatelessWidget {
   final List<Movimiento> movimientos;
