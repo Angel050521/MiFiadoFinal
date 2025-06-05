@@ -50,7 +50,7 @@ class SyncHelper {
         List<Map<String, dynamic>> pedidosJson = [];
 
         print('📊 [DEBUG] Procesando ${clientes.length} clientes...');
-        // Recopilar datos locales
+        // Obtener todos los productos y movimientos
         for (final cliente in clientes) {
           try {
             // Obtener productos del cliente
@@ -60,14 +60,19 @@ class SyncHelper {
               final movimientos = await db.getMovimientosPorProducto(int.parse(producto.id!));
               movimientosJson.addAll(movimientos.map((m) => m.toMap()));
             }
-            
-            // Obtener pedidos del cliente
-            final pedidos = await db.getPedidosPorCliente(int.parse(cliente.id!));
-            pedidosJson.addAll(pedidos.map((p) => p.toMap()));
           } catch (e) {
             print('⚠️ [WARN] Error al obtener datos del cliente ${cliente.id}: $e');
             // Continuar con los siguientes clientes
           }
+        }
+        
+        // Obtener todos los pedidos (incluyendo aquellos sin cliente asociado)
+        try {
+          final todosLosPedidos = await db.getPedidos();
+          print('📦 [SYNC] Obtenidos ${todosLosPedidos.length} pedidos para sincronizar');
+          pedidosJson.addAll(todosLosPedidos.map((p) => p.toMap()));
+        } catch (e) {
+          print('⚠️ [WARN] Error al obtener todos los pedidos: $e');
         }
 
         // Obtener registros eliminados

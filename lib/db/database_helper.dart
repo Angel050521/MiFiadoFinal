@@ -745,14 +745,38 @@ class DatabaseHelper {
 
   // --------- MÉTODOS PEDIDOS ---------
   Future<int> insertPedido(Pedido pedido) async {
-    final db = await instance.database;
-    return await db.insert('pedidos', pedido.toMap());
+    try {
+      print('🔄 [PEDIDO] Iniciando inserción de pedido');
+      print('   - Cliente: ${pedido.cliente}');
+      print('   - Título: ${pedido.titulo}');
+      print('   - Fecha entrega: ${pedido.fechaEntrega}');
+      print('   - Precio: ${pedido.precio}');
+      
+      final db = await instance.database;
+      final map = pedido.toMap();
+      print('   - Datos a insertar: $map');
+      
+      final id = await db.insert('pedidos', map);
+      print('✅ [PEDIDO] Pedido insertado correctamente con ID: $id');
+      
+      return id;
+    } catch (e, stackTrace) {
+      print('❌ [ERROR PEDIDO] Error al insertar pedido: $e');
+      print('Stack trace: $stackTrace');
+      rethrow;
+    }
   }
 
   Future<List<Pedido>> getPedidos() async {
-    final db = await instance.database;
-    final result = await db.query('pedidos');
-    return result.map((json) => Pedido.fromMap(json)).toList();
+    try {
+      final db = await instance.database;
+      final result = await db.query('pedidos');
+      print('✅ [PEDIDO] Obtenidos ${result.length} pedidos de la base de datos');
+      return result.map((json) => Pedido.fromMap(json)).toList();
+    } catch (e) {
+      print('❌ [ERROR PEDIDO] Error al obtener pedidos: $e');
+      rethrow;
+    }
   }
 
   Future<int> eliminarPedido(int id) async {
@@ -948,6 +972,7 @@ class DatabaseHelper {
   
   /// Elimina físicamente los registros eliminados que ya han sido sincronizados
   /// o que tienen más de una hora de haber sido eliminados
+
   Future<void> limpiarRegistrosEliminados() async {
     try {
       print('🔄 [DEBUG] Limpiando registros eliminados sincronizados');

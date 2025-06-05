@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../db/database_helper.dart';
 import '../models/pedido.dart';
+import '../utils/sync_helper.dart';
 
 class PedidoFormScreen extends StatefulWidget {
   final Pedido? pedido;
@@ -85,7 +87,12 @@ class _PedidoFormScreenState extends State<PedidoFormScreen> {
   }
 
   Future<void> _guardar() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      print('⚠️ [PEDIDO] Validación del formulario fallida');
+      return;
+    }
+
+    print('🔄 [PEDIDO] Iniciando proceso de guardado de pedido');
 
     DateTime? fechaFinal;
     if (_fechaEntrega != null) {
@@ -98,6 +105,14 @@ class _PedidoFormScreenState extends State<PedidoFormScreen> {
         hora.minute,
       );
     }
+
+    print('📝 [PEDIDO] Creando objeto Pedido con los datos del formulario:');
+    print('   - Cliente: ${_clienteCtrl.text}');
+    print('   - Teléfono: ${_telefonoCtrl.text}');
+    print('   - Título: ${_tituloCtrl.text}');
+    print('   - Descripción: ${_descCtrl.text}');
+    print('   - Precio: ${_precioCtrl.text}');
+    print('   - Fecha entrega: $fechaFinal');
 
     final nuevo = Pedido(
       id: widget.pedido?.id,
@@ -113,12 +128,39 @@ class _PedidoFormScreenState extends State<PedidoFormScreen> {
     );
 
     if (widget.pedido == null) {
-      await _db.insertPedido(nuevo);
+      print('➕ [PEDIDO] Insertando nuevo pedido en la base de datos local');
+      final id = await _db.insertPedido(nuevo);
+        print('✅ [PEDIDO] Pedido insertado con éxito. ID asignado: $id');
     } else {
-      await _db.updatePedido(nuevo);
+      print('🔄 [PEDIDO] Actualizando pedido existente ID: ${nuevo.id}');
+      final rowsAffected = await _db.updatePedido(nuevo);
+      print('✅ [PEDIDO] Pedido actualizado. Filas afectadas: $rowsAffected');
     }
 
-    Navigator.pop(context, true);
+    // Marcar como pendiente de sincronización
+    print('🔄 [SINCRONIZAR] Marcando sincronización como pendiente');
+    await SyncHelper.marcarPendiente();
+    
+    // Intentar sincronizar si hay conexión
+    final prefs = await SharedPreferences.getInstance();
+    final userId = prefs.getString('userId');
+    final token = prefs.getString('token');
+    
+    if (userId != null && token != null) {
+      print('🔄 [SINCRONIZAR] Intentando sincronizar con la nube...');
+      try {
+        await SyncHelper.sincronizarSiConectado(userId: userId, token: token);
+        print('✅ [SINCRONIZAR] Sincronización completada exitosamente');
+      } catch (e) {
+        print('⚠️ [SINCRONIZAR] Error durante la sincronización: $e');
+        // No hacemos nada, la sincronización se intentará en el próximo inicio
+      }
+    }
+
+    print('🏁 [PEDIDO] Guardado completado, cerrando formulario');
+    if (mounted) {
+      Navigator.pop(context, true);
+    }
   }
 
   InputDecoration _decoration({required IconData icon, required String hint}) {
