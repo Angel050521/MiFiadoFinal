@@ -676,6 +676,31 @@ class SyncHelper {
         }
       }
 
+      // Procesar pedidos
+      if (data['pedidos'] is List) {
+        final pedidosRemotos = data['pedidos'] as List;
+        hayDatos = hayDatos || pedidosRemotos.isNotEmpty;
+        
+        for (var pedidoData in pedidosRemotos) {
+          final idPedido = pedidoData['id']?.toString();
+          final eliminados = await db.query(
+            'registros_eliminados',
+            where: 'tipo = ? AND id_original = ?',
+            whereArgs: ['pedido', idPedido],
+          );
+          if (eliminados.isNotEmpty) {
+            print('⛔ Pedido $idPedido está marcado como eliminado, no se restaura.');
+            continue;
+          }
+          try {
+            final pedido = Pedido.fromMap(pedidoData);
+            await db.insertOrUpdatePedido(pedido);
+          } catch (e) {
+            print('❌ Error al guardar pedido localmente: $e');
+          }
+        }
+      }
+
       if (!hayDatos) {
         if (context.mounted) {
           _mostrarError(context, 'No hay datos para restaurar en la nube');
@@ -730,7 +755,7 @@ class SyncHelper {
 
       print('🔍 Estado de sincronización:');
       print('   - Conectado: $conectado');
-      print('   - User ID: ${userId != null && userId.length >= 3 ? '***${userId.substring(0, 3)}...' : userId ?? 'null'}');
+      print('   - User ID: ${userId != null && userId.length >= 3 ? '***${userId.substring(0, 3)}' : userId ?? 'null'}');
       print('   - Token: ${token != null && token.length >= 4 ? '***${token.substring(token.length - 4)}' : token != null ? '***[token_corto]' : 'null'}');
       print('   - Plan: $plan');
 

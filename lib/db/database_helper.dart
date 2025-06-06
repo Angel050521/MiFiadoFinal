@@ -905,6 +905,13 @@ await db.execute('''
 
   Future<int> eliminarPedido(int id) async {
     final db = await instance.database;
+    // Registrar eliminación lógica
+    await db.insert('registros_eliminados', {
+      'tipo': 'pedido',
+      'id_original': id.toString(),
+      'sincronizado': 0,
+    });
+    // Borrado físico
     return await db.delete('pedidos', where: 'id = ?', whereArgs: [id]);
   }
 
@@ -1148,5 +1155,14 @@ await db.execute('''
   Future<void> eliminarTodosLosPedidos() async {
   final db = await instance.database;
   await db.delete('pedidos');
+}
+
+Future<List<Map<String, dynamic>>> query(
+  String table, {
+  String? where,
+  List<Object?>? whereArgs,
+}) async {
+  final db = await database;
+  return db.query(table, where: where, whereArgs: whereArgs);
 }
 }
