@@ -8,6 +8,7 @@ import '../models/cliente.dart';
 import '../models/producto.dart';
 import '../models/movimiento.dart';
 import '../models/pedido.dart';
+import '../models/gasto.dart';
 
 class SyncHelper {
   static const _pendienteKey = 'pendiente_sincronizacion';
@@ -42,6 +43,39 @@ class SyncHelper {
       }
     } catch (e) {
       print('❌ [SYNC] Error al sincronizar pedido: $e');
+      return false;
+    }
+  }
+
+  static Future<bool> sincronizarGasto(Gasto gasto, String token) async {
+    try {
+      print('🔄 [SYNC] Iniciando sincronización de gasto ${gasto.id}');
+      final nubeService = NubeService();
+      
+      // Obtener el userId del SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getString('userId');
+      
+      if (userId == null || userId.isEmpty) {
+        print('❌ [SYNC] No se pudo obtener el userId');
+        return false;
+      }
+      
+      final response = await nubeService.sincronizarDatos(
+        userId: userId,
+        token: token,
+        gastos: [gasto.toMap()],
+      );
+      
+      if (response['success'] == true) {
+        print('✅ [SYNC] Gasto ${gasto.id} sincronizado exitosamente');
+        return true;
+      } else {
+        print('❌ [SYNC] Error al sincronizar gasto: ${response['message']}');
+        return false;
+      }
+    } catch (e) {
+      print('❌ [SYNC] Error al sincronizar gasto: $e');
       return false;
     }
   }

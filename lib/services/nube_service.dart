@@ -9,6 +9,9 @@ import 'package:http_parser/http_parser.dart';
 import 'package:fiado/models/pedido.dart';
 
 class NubeService {
+  // URL base del worker de Cloudflare
+  static const String baseUrl = 'https://fiadosync.angel050521.workers.dev';
+
   Future<Map<String, dynamic>> sincronizarDatos({
     required String userId,
     required String token,
@@ -16,6 +19,7 @@ class NubeService {
     List<Map<String, dynamic>>? productos,
     List<Map<String, dynamic>>? movimientos,
     List<Map<String, dynamic>>? pedidos,
+    List<Map<String, dynamic>>? gastos,
     Map<String, dynamic>? deleted,
   }) async {
     try {
@@ -27,6 +31,7 @@ class NubeService {
         'productos': productos ?? [],
         'movimientos': movimientos ?? [],
         'pedidos': pedidos ?? [],
+        'gastos': gastos ?? [],
         'deleted': deleted ?? {},
       };
 
@@ -35,6 +40,7 @@ class NubeService {
       print('   - Productos: ${productos?.length ?? 0}');
       print('   - Movimientos: ${movimientos?.length ?? 0}');
       print('   - Pedidos: ${pedidos?.length ?? 0}');
+      print('   - Gastos: ${gastos?.length ?? 0}');
 
       final response = await http.post(
         url,
@@ -72,8 +78,6 @@ class NubeService {
       };
     }
   }
-
-  static const String baseUrl = 'https://fiadosync.angel050521.workers.dev';
 
   /// 🔄 Actualiza el plan de un usuario en la nube
   static Future<Map<String, dynamic>> actualizarPlan({
@@ -708,6 +712,67 @@ class NubeService {
       final error = 'Error inesperado en actualizarDevice: $e\n$stackTrace';
       print('❌ $error');
       return {'success': false, 'error': 'Error al actualizar dispositivo: ${e.toString()}'};
+    }
+  }
+
+  /// Obtiene los pedidos del usuario desde la nube
+  static Future<Map<String, dynamic>> obtenerPedidosDesdeNube({
+    required String userId,
+    required String token,
+  }) async {
+    final url = Uri.parse('$baseUrl/api/pedidos?userId=$userId');
+    print('🔄 [NubeService] Obteniendo pedidos para el usuario: $userId');
+
+    try {
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 30));
+
+      print('📥 [NubeService] Respuesta de la API: ${response.statusCode}');
+      
+      if (response.statusCode == 200) {
+        final responseData = jsonDecode(utf8.decode(response.bodyBytes));
+        
+        if (responseData['success'] == true) {
+          print('✅ [NubeService] Pedidos obtenidos exitosamente');
+          return {
+            'success': true,
+            'pedidos': List<Map<String, dynamic>>.from(responseData['pedidos'] ?? []),
+          };
+        } else {
+          final error = responseData['error'] ?? 'Error desconocido al obtener pedidos';
+          print('❌ [NubeService] Error en la respuesta: $error');
+          return {
+            'success': false,
+            'error': error,
+          };
+        }
+      } else {
+        final error = 'Error al obtener pedidos: ${response.statusCode}';
+        print('❌ [NubeService] $error');
+        return {
+          'success': false,
+          'error': error,
+        };
+      }
+    } on TimeoutException {
+      const error = 'Tiempo de espera agotado al obtener pedidos';
+      print('❌ [NubeService] $error');
+      return {
+        'success': false,
+        'error': error,
+      };
+    } catch (e) {
+      final error = 'Error al obtener pedidos: $e';
+      print('❌ [NubeService] $error');
+      return {
+        'success': false,
+        'error': error,
+      };
     }
   }
 }

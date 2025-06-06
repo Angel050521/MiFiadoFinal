@@ -27,7 +27,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 9, // Incremented version to rename productoId to producto_id in movimientos
+      version: 16, // o el siguiente número de versión
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -203,7 +203,57 @@ class DatabaseHelper {
     }
     
     if (oldVersion < 9) {
-      // Migración para la versión 9 - Renombrar productoId a producto_id en movimientos
+      // Migración para la versión 9 - Actualizar estructura de la tabla gastos
+      try {
+        // Verificar si la tabla gastos existe
+        final tables = await db.rawQuery(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name='gastos'"
+        );
+        
+        if (tables.isNotEmpty) {
+          // Verificar si la columna 'descripcion' existe (esquema antiguo)
+          final columns = await db.rawQuery('PRAGMA table_info(gastos)');
+          final hasDescripcion = columns.any((col) => col['name'] == 'descripcion');
+          
+          if (hasDescripcion) {
+            // Crear una tabla temporal con el nuevo esquema
+            await db.execute('''
+              CREATE TABLE gastos_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                concepto TEXT,
+                monto REAL,
+                fecha TEXT
+              );
+            ''');
+            
+            // Copiar los datos de la tabla antigua a la nueva
+            await db.execute('''
+              INSERT INTO gastos_new (id, concepto, monto, fecha)
+              SELECT id, descripcion as concepto, cantidad as monto, fecha FROM gastos
+            ''');
+            
+            // Eliminar la tabla antigua
+            await db.execute('DROP TABLE gastos');
+            
+            // Renombrar la nueva tabla
+            await db.execute('ALTER TABLE gastos_new RENAME TO gastos');
+            
+            print('✅ [MIGRACION] Tabla gastos actualizada: descripcion -> concepto, cantidad -> monto');
+          } else {
+            print('ℹ️ [MIGRACION] La tabla gastos ya tiene la estructura actualizada');
+          }
+        } else {
+          print('ℹ️ [MIGRACION] La tabla gastos no existe, se creará con la estructura correcta');
+        }
+      } catch (e, stackTrace) {
+        print('❌ [ERROR] Error en migración de tabla gastos: $e');
+        print('Stack trace: $stackTrace');
+        rethrow;
+      }
+    }
+    
+    if (oldVersion < 10) {
+      // Migración para la versión 10 - Renombrar productoId a producto_id en movimientos
       try {
         // Verificar si la tabla movimientos existe
         final tables = await db.rawQuery(
@@ -254,6 +304,54 @@ class DatabaseHelper {
         rethrow;
       }
     }
+    
+    if (oldVersion < 11) {
+      // Migración para agregar createdAt y updatedAt a pedidos
+      try {
+        final columns = await db.rawQuery('PRAGMA table_info(pedidos)');
+        final hasCreatedAt = columns.any((col) => col['name'] == 'createdAt');
+        final hasUpdatedAt = columns.any((col) => col['name'] == 'updatedAt');
+
+        if (!hasCreatedAt) {
+          await db.execute('ALTER TABLE pedidos ADD COLUMN createdAt TEXT');
+          print('✅ [MIGRACION] Columna "createdAt" agregada a la tabla pedidos');
+        } else {
+          print('ℹ️ [MIGRACION] La columna "createdAt" ya existe en la tabla pedidos');
+        }
+
+        if (!hasUpdatedAt) {
+          await db.execute('ALTER TABLE pedidos ADD COLUMN updatedAt TEXT');
+          print('✅ [MIGRACION] Columna "updatedAt" agregada a la tabla pedidos');
+        } else {
+          print('ℹ️ [MIGRACION] La columna "updatedAt" ya existe en la tabla pedidos');
+        }
+      } catch (e, stackTrace) {
+        print('❌ [ERROR] Error en migración a versión 11: $e');
+        print('Stack trace: $stackTrace');
+        rethrow;
+      }
+    }
+
+    if (oldVersion < 16) {
+  final columns = await db.rawQuery('PRAGMA table_info(pedidos)');
+  final hasCreatedAt = columns.any((col) => col['name'] == 'createdAt');
+  final hasUpdatedAt = columns.any((col) => col['name'] == 'updatedAt');
+
+  if (!hasCreatedAt) {
+    await db.execute('ALTER TABLE pedidos ADD COLUMN createdAt TEXT');
+    print('✅ [MIGRACION] Columna "createdAt" agregada a la tabla pedidos');
+  } else {
+    print('ℹ️ [MIGRACION] La columna "createdAt" ya existe en la tabla pedidos');
+  }
+
+  if (!hasUpdatedAt) {
+    await db.execute('ALTER TABLE pedidos ADD COLUMN updatedAt TEXT');
+    print('✅ [MIGRACION] Columna "updatedAt" agregada a la tabla pedidos');
+  } else {
+    print('ℹ️ [MIGRACION] La columna "updatedAt" ya existe en la tabla pedidos');
+  }
+}
+
     
     print('✅ [MIGRACION] Base de datos actualizada exitosamente a la versión $newVersion');
   }
@@ -314,27 +412,32 @@ class DatabaseHelper {
       );
     ''');
 
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS pedidos (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        cliente_id INTEGER,
-        titulo TEXT NOT NULL,
-        descripcion TEXT,
-        fecha_entrega TEXT,
-        precio REAL,
-        hecho INTEGER DEFAULT 0,
-        fecha_hecho TEXT,
-        cliente_nombre TEXT,
-        cliente_telefono TEXT,
-        FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE SET NULL
-      );
-    ''');
+await db.execute('''
+  CREATE TABLE IF NOT EXISTS pedidos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cliente_id INTEGER,
+    titulo TEXT NOT NULL,
+    descripcion TEXT,
+    fecha_entrega TEXT,
+    precio REAL,
+    hecho INTEGER DEFAULT 0,
+    fecha_hecho TEXT,
+    cliente_nombre TEXT,
+    cliente_telefono TEXT,
+    createdAt TEXT,
+    updatedAt TEXT,
+    FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE SET NULL
+  );
+''');
+
+
+
 
     await db.execute('''
       CREATE TABLE gastos (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        descripcion TEXT,
-        cantidad REAL,
+        concepto TEXT,
+        monto REAL,
         fecha TEXT
       );
     ''');
@@ -766,6 +869,28 @@ class DatabaseHelper {
     }
   }
 
+  Future<void> insertOrUpdatePedido(Pedido pedido) async {
+  final db = await database;
+  if (pedido.id == null) {
+    // Insertar nuevo pedido
+    await db.insert('pedidos', pedido.toMap());
+  } else {
+    // Intentar actualizar
+    final count = await db.update(
+      'pedidos',
+      pedido.toMap(),
+      where: 'id = ?',
+      whereArgs: [pedido.id],
+    );
+    if (count == 0) {
+      // Si no existía, insertar con el ID original
+      final map = pedido.toMap();
+      map['id'] = int.tryParse(pedido.id!) ?? pedido.id;
+      await db.insert('pedidos', map);
+    }
+  }
+}
+
   Future<List<Pedido>> getPedidos() async {
     try {
       final db = await instance.database;
@@ -1019,4 +1144,9 @@ class DatabaseHelper {
       // No relanzamos la excepción para no interrumpir el flujo de la aplicación
     }
   }
+  
+  Future<void> eliminarTodosLosPedidos() async {
+  final db = await instance.database;
+  await db.delete('pedidos');
+}
 }

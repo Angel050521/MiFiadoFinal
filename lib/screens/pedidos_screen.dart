@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../db/database_helper.dart';
 import '../models/pedido.dart';
 import '../models/gasto.dart';
+import '../services/nube_service.dart';
+import '../utils/network_util.dart';
+import '../utils/sync_helper.dart';
 import 'pedido_form_screen.dart';
 import 'pedido_detail_screen.dart';
 import 'gasto_form_screen.dart';
-import '../utils/sync_helper.dart';
 
 class PedidosScreen extends StatefulWidget {
   const PedidosScreen({Key? key}) : super(key: key);
@@ -17,16 +20,141 @@ class PedidosScreen extends StatefulWidget {
 
 class _PedidosScreenState extends State<PedidosScreen> {
   List<Gasto> _gastos = [];
-
   final _db = DatabaseHelper.instance;
   List<Pedido> _pedidos = [];
   String _busqueda = '';  // texto de búsqueda
+  String _estadoConexion = 'Desconectado';
+  String _ultimaSync = 'Nunca';
+  bool _pendienteSync = false;
+  bool _sincronizando = false;
 
   @override
   void initState() {
     super.initState();
-    _cargarPedidos();
-    _cargarGastos();
+    _cargarDatosIniciales();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Recargar datos cada vez que la pantalla se vuelva a mostrar
+    _cargarDatosIniciales();
+  }
+
+  Future<void> _cargarDatosIniciales() async {
+    await _cargarPedidos();
+    await _cargarGastos();
+    await _cargarEstadoSync();
+    
+    // Verificar si hay cambios pendientes de sincronizar
+    if (mounted) {
+      final pendiente = await SyncHelper.hayPendientes();
+      if (pendiente) {
+        _sincronizarSiEsPosible();
+      }
+    }
+  }
+  
+  Future<void> _cargarEstadoSync() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final conectado = await NetworkUtil.hayConexion();
+      final ultima = prefs.getString('last_sync') ?? 'Nunca';
+      final pendiente = await SyncHelper.hayPendientes();
+
+      if (mounted) {
+        setState(() {
+          _estadoConexion = conectado ? 'Conectado' : 'Desconectado';
+          _ultimaSync = ultima;
+          _pendienteSync = pendiente;
+        });
+      }
+    } catch (e) {
+      print('❌ Error en _cargarEstadoSync: $e');
+      if (mounted) {
+        _mostrarSnackBar('Error al cargar el estado de sincronización');
+      }
+    }
+  }
+  
+  Future<bool> _sincronizarSiEsPosible() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getString('userId');
+      final token = prefs.getString('token');
+
+      // Verificar si hay conexión a internet
+      final hayConexion = await NetworkUtil.hayConexion();
+      if (!hayConexion) {
+        _mostrarSnackBar('❌ No hay conexión a internet');
+        return false;
+      }
+
+      if (userId == null || token == null) {
+        _mostrarSnackBar('❌ No se encontró la sesión del usuario');
+        return false;
+      }
+
+      setState(() => _sincronizando = true);
+
+      // Obtener pedidos de la nube
+      final resultado = await NubeService.obtenerPedidosDesdeNube(
+        userId: userId,
+        token: token,
+      );
+
+      if (resultado['success'] == true) {
+        final List<dynamic> pedidosRemotos = resultado['pedidos'] ?? [];
+        
+        // Guardar pedidos en la base de datos local
+        for (var pedidoData in pedidosRemotos) {
+          try {
+            final pedido = Pedido.fromMap(pedidoData);
+            await _db.insertOrUpdatePedido(pedido);
+          } catch (e) {
+            print('❌ Error al guardar pedido localmente: $e');
+          }
+        }
+
+        // Actualizar la lista de pedidos
+        await _cargarPedidos();
+        
+        // Actualizar última sincronización
+        final ahora = DateTime.now();
+        final formatter = DateFormat('dd/MM/yyyy HH:mm');
+        await prefs.setString('last_sync', formatter.format(ahora));
+        
+        setState(() {
+          _ultimaSync = formatter.format(ahora);
+          _pendienteSync = false;
+        });
+        
+        _mostrarSnackBar('✅ Pedidos sincronizados correctamente');
+        return true;
+      } else {
+        _mostrarSnackBar('❌ ${resultado['error'] ?? 'Error al sincronizar pedidos'}');
+        return false;
+      }
+    } catch (e) {
+      print('❌ Error en _sincronizarSiEsPosible: $e');
+      _mostrarSnackBar('❌ Error al sincronizar: $e');
+      return false;
+    } finally {
+      if (mounted) {
+        setState(() => _sincronizando = false);
+      }
+    }
+  }
+  
+  void _mostrarSnackBar(String mensaje) {
+    if (!mounted) return;
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(mensaje),
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
 
   Future<void> _cargarPedidos() async {
@@ -264,6 +392,124 @@ String _labelFecha(DateTime? fecha) {
   return 'En $diff días';
 }
 
+  Widget _buildEstadoSyncCard() {
+    return Card(
+      color: const Color(0xFF252A3D),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            _sincronizando
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(
+                    _pendienteSync ? Icons.cloud_off : Icons.cloud_done,
+                    color: _pendienteSync ? Colors.orangeAccent : Colors.greenAccent,
+                  ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Estado: $_estadoConexion',
+                    style: const TextStyle(color: Colors.white70, fontSize: 14),
+                  ),
+                  Text(
+                    'Última sincronización: $_ultimaSync',
+                    style: const TextStyle(color: Colors.white54, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _descargarPedidosDeNube() {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF252A3D),
+        title: const Text(
+          "¿Restaurar pedidos desde la nube?",
+          style: TextStyle(color: Colors.white),
+        ),
+        content: const Text(
+          "Esto reemplazará todos los pedidos locales actuales.",
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              "Cancelar",
+              style: TextStyle(color: Colors.white54),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context); // Cierra el diálogo
+              setState(() => _sincronizando = true);
+              try {
+                final prefs = await SharedPreferences.getInstance();
+                final userId = prefs.getString('userId');
+                final token = prefs.getString('token');
+
+                if (userId == null || token == null) {
+                  _mostrarSnackBar('❌ No se encontró la sesión del usuario');
+                  return;
+                }
+
+                // Llama a tu servicio para obtener los pedidos de la nube
+                final resultado = await NubeService.obtenerPedidosDesdeNube(
+                  userId: userId,
+                  token: token,
+                );
+
+                if (resultado['success'] == true) {
+                  // Borra todos los pedidos locales antes de restaurar
+                  await _db.eliminarTodosLosPedidos();
+
+                  final List<dynamic> pedidosRemotos = resultado['pedidos'] ?? [];
+                  for (var pedidoData in pedidosRemotos) {
+                    try {
+                      final pedido = Pedido.fromMap(pedidoData);
+                      await _db.insertOrUpdatePedido(pedido);
+                    } catch (e) {
+                      print('❌ Error al guardar pedido localmente: $e');
+                    }
+                  }
+                  await _cargarPedidos();
+                  _mostrarSnackBar('✅ Pedidos restaurados desde la nube');
+                } else {
+                  _mostrarSnackBar('❌ ${resultado['error'] ?? 'Error al restaurar pedidos'}');
+                }
+              } catch (e) {
+                print('❌ Error en _descargarPedidosDeNube: $e');
+                _mostrarSnackBar('❌ Error al restaurar: $e');
+              } finally {
+                if (mounted) setState(() => _sincronizando = false);
+                _cargarEstadoSync();
+              }
+            },
+            child: const Text(
+              "Restaurar",
+              style: TextStyle(color: Colors.redAccent),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // Filtrar pedidos por cliente o teléfono
@@ -283,11 +529,39 @@ String _labelFecha(DateTime? fecha) {
         backgroundColor: const Color(0xFF1B1E2F),
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
+        actions: [
+          // Botón blanco para descargar pedidos de la nube
+          IconButton(
+            icon: const Icon(Icons.cloud_download),
+            color: Colors.white,
+            tooltip: 'Descargar pedidos de la nube',
+            onPressed: _sincronizando ? null : _descargarPedidosDeNube,
+          ),
+          // Botón de sincronización (verde/naranja)
+          IconButton(
+            onPressed: _sincronizarSiEsPosible,
+            tooltip: 'Sincronizar ahora',
+            icon: _sincronizando
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : Icon(
+                    _pendienteSync ? Icons.cloud_sync : Icons.cloud_done,
+                    color: _pendienteSync ? Colors.orangeAccent : Colors.greenAccent,
+                  ),
+          ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
+            _buildEstadoSyncCard(),
             // Barra de búsqueda
             TextField(
               style: const TextStyle(color: Colors.white),
@@ -344,17 +618,55 @@ String _labelFecha(DateTime? fecha) {
           children: [
             // Botón Agregar Gasto
             GestureDetector(
-              onTap: () {
+              onTap: () async {
+                // Obtener el token de autenticación
+                final prefs = await SharedPreferences.getInstance();
+                final token = prefs.getString('token') ?? '';
+                
                 Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (_) => GastoFormScreen(
                       onGuardar: (gasto) async {
-                        await _db.insertGasto(gasto);
-                        await SyncHelper.marcarPendiente();
-                        _cargarGastos();
-                        setState(() {});
-                        await SyncHelper.intentarSincronizar();
+                        try {
+                          // Insertar en la base de datos local
+                          final id = await _db.insertGasto(gasto);
+                          
+                          // Actualizar el ID del gasto con el generado por la base de datos
+                          final gastoConId = Gasto(
+                            id: id.toString(),
+                            concepto: gasto.concepto,
+                            monto: gasto.monto,
+                            fecha: gasto.fecha,
+                          );
+                          
+                          // Sincronizar con la nube
+                          await SyncHelper.sincronizarGasto(gastoConId, token);
+                          
+                          // Actualizar la UI
+                          _cargarGastos();
+                          setState(() {});
+                          
+                          // Mostrar mensaje de éxito
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Gasto guardado y sincronizado'),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          print('❌ Error al guardar el gasto: $e');
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Error al guardar el gasto. Se guardará localmente.'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        }
                       },
                     ),
                   ),

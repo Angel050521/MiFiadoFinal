@@ -92,6 +92,11 @@ export default {
       return handleActualizarPlan(request, db);
     }
 
+    // Endpoint para obtener pedidos
+    if (cleanPath === '/api/pedidos' && request.method === 'GET') {
+      return handleGetPedidos(request, db, url);
+    }
+
     return new Response('Ruta no encontrada', { status: 404, headers: corsHeaders });
   }
 };
@@ -121,6 +126,21 @@ async function initDatabase(db) {
     `).run();
     
     console.log('✅ Tabla de pedidos inicializada');
+
+    // Crear tabla de gastos si no existe
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS gastos (
+        id INTEGER PRIMARY KEY,
+        concepto TEXT NOT NULL,
+        monto REAL NOT NULL,
+        fecha TEXT NOT NULL,
+        userId TEXT NOT NULL,
+        createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
+      )
+    `).run();
+    
+    console.log('✅ Tabla de gastos inicializada');
   } catch (error) {
     console.error('❌ Error al inicializar la base de datos:', error);
     throw error;
@@ -221,6 +241,36 @@ async function handleSyncData(request, db) {
         cliente.correo ?? ''
       ).run();
     }
+
+
+    if (data.gastos && data.gastos.length > 0) {
+  console.log(`🔄 Sincronizando ${data.gastos.length} gastos`);
+  
+  for (const gasto of data.gastos) {
+    try {
+      await db.prepare(`
+        INSERT INTO gastos (id, concepto, monto, fecha, userId)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          concepto = excluded.concepto,
+          monto = excluded.monto,
+          fecha = excluded.fecha,
+          userId = excluded.userId,
+          updated_at = CURRENT_TIMESTAMP
+      `).bind(
+        gasto.id ? parseInt(gasto.id) : null,
+        gasto.concepto || '',
+        gasto.monto || 0,
+        gasto.fecha || new Date().toISOString(),
+        userId
+      ).run();
+      
+      console.log(`✅ Gasto ${gasto.id} sincronizado correctamente`);
+    } catch (error) {
+      console.error(`❌ Error al sincronizar gasto ${gasto.id}:`, error);
+    }
+  }
+}
 
     // Sincronizar PRODUCTOS
     for (const producto of productos) {
@@ -406,6 +456,33 @@ async function handleSyncData(request, db) {
       }
     }
 
+    // Eliminar gastos (si se especifican)
+    if (deleted.gastos && deleted.gastos.length > 0) {
+      console.log(`🗑️  Eliminando ${deleted.gastos.length} gastos`);
+      for (const id of deleted.gastos) {
+        try {
+          const gastoId = parseInt(id, 10);
+          console.log(`🗑️  Intentando eliminar gasto con ID: ${gastoId}`);
+          
+          // Verificar si el gasto existe antes de intentar eliminarlo
+          const { results: gastoExiste } = await db.prepare('SELECT id FROM gastos WHERE id = ?')
+            .bind(gastoId)
+            .all();
+            
+          if (gastoExiste && gastoExiste.length > 0) {
+            await db.prepare('DELETE FROM gastos WHERE id = ?')
+              .bind(gastoId)
+              .run();
+            console.log(`✅ Gasto ${gastoId} eliminado correctamente`);
+          } else {
+            console.log(`⚠️  Gasto ${gastoId} no encontrado, omitiendo...`);
+          }
+        } catch (error) {
+          console.error(`❌ Error al eliminar gasto ${id}:`, error);
+        }
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -479,6 +556,20 @@ async function handleGetSyncData(request, db, url) {
       JOIN productos p ON m.producto_id = p.id
     `).all();
 
+      // Obtener gastos
+const { results: gastos = [] } = await db.prepare(`
+  SELECT 
+    id, 
+    concepto, 
+    monto, 
+    fecha,
+    '${userId}' as userId,
+    createdAt
+  FROM gastos
+  WHERE userId = ?
+`).bind(userId).all();
+
+
     // Obtener pedidos
     const { results: pedidos = [] } = await db.prepare(`
       SELECT 
@@ -533,6 +624,16 @@ async function handleGetSyncData(request, db, url) {
           userId: m.userId || userId,
           createdAt: m.createdAt || new Date().toISOString()
         })),
+
+        gastos: gastos.map(g => ({
+      id: g.id,
+      concepto: g.concepto || '',
+      monto: g.monto || 0,
+      fecha: g.fecha || new Date().toISOString(),
+      userId: g.userId || userId,
+      createdAt: g.createdAt || new Date().toISOString()
+    })),
+
         pedidos: pedidos.map(ped => ({
           id: ped.id,
           cliente_id: ped.clienteId?.toString() || '',
@@ -657,39 +758,100 @@ async function handleGetSubscription(request, db, url) {
   }
 }
 
+async function handleGetPedidos(request, db, url) {
+  try {
+    const userId = url.searchParams.get('userId');
+    
+    if (!userId) {
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: 'Se requiere el parámetro userId' 
+      }), { 
+        status: 400, 
+        headers: { 'Content-Type': 'application/json', ...corsHeaders } 
+      });
+    }
+    
+    // Obtener los pedidos del usuario
+    const { results: pedidos } = await db.prepare(
+      `SELECT 
+        id, 
+        cliente_id as clienteId,
+        titulo, 
+        descripcion, 
+        fecha_entrega as fechaEntrega, 
+        precio,
+        hecho,
+        fecha_hecho as fechaHecho,
+        cliente_nombre as clienteNombre,
+        cliente_telefono as clienteTelefono,
+        userId,
+        createdAt
+      FROM pedidos 
+      WHERE userId = ? 
+      ORDER BY fecha_entrega DESC`
+    ).bind(userId).all();
+    
+    return new Response(JSON.stringify({ 
+      success: true, 
+      pedidos: pedidos || []
+    }), { 
+      headers: { 'Content-Type': 'application/json', ...corsHeaders } 
+    });
+    
+  } catch (error) {
+    console.error('Error al obtener pedidos:', error);
+    return new Response(JSON.stringify({ 
+      success: false, 
+      error: 'Error al obtener los pedidos',
+      details: error.message 
+    }), { 
+      status: 500, 
+      headers: { 'Content-Type': 'application/json', ...corsHeaders } 
+    });
+  }
+}
+
 async function handleActualizarPlan(request, db) {
   try {
     const { userId, plan } = await request.json();
-
+    
     if (!userId || !plan) {
-      return new Response(
-        JSON.stringify({ error: 'Se requieren userId y plan' }),
-        { status: 400, headers: corsHeaders }
-      );
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: 'Se requieren userId y plan' 
+      }), { 
+        status: 400, 
+        headers: { 'Content-Type': 'application/json', ...corsHeaders } 
+      });
     }
-
-    // Asegúrate que el campo en la tabla es "id", NO "userId"
+    
+    // Actualizar el plan del usuario
     const { success } = await db.prepare(
       'UPDATE usuarios SET plan = ? WHERE id = ?'
     ).bind(plan, userId).run();
-
-    if (success) {
-      return new Response(
-        JSON.stringify({ success: true, message: 'Plan actualizado correctamente' }),
-        { headers: { 'Content-Type': 'application/json', ...corsHeaders } }
-      );
-    } else {
-      return new Response(
-        JSON.stringify({ error: 'Error al actualizar el plan' }),
-        { status: 500, headers: corsHeaders }
-      );
+    
+    if (!success) {
+      throw new Error('No se pudo actualizar el plan');
     }
+    
+    return new Response(JSON.stringify({ 
+      success: true, 
+      message: 'Plan actualizado correctamente' 
+    }), { 
+      headers: { 'Content-Type': 'application/json', ...corsHeaders } 
+    });
+    
   } catch (error) {
     console.error('Error al actualizar plan:', error);
-    return new Response(
-      JSON.stringify({ error: 'Error al actualizar el plan', details: error.message }),
-      { status: 500, headers: corsHeaders }
-    );
+    return new Response(JSON.stringify({ 
+      success: false, 
+      error: 'Error al actualizar el plan',
+      details: error.message 
+    }), { 
+      status: 500, 
+      headers: { 'Content-Type': 'application/json', ...corsHeaders } 
+    });
   }
 
 }

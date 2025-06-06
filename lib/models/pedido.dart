@@ -52,11 +52,19 @@ class Pedido {
     );
   }
 
-  Map<String, Object?> toMap() {
+  Map<String, dynamic> toMap() {
+    // Si el ID es numérico, lo convertimos a int, de lo contrario lo dejamos como string
+    final dynamic idValue;
+    if (id != null) {
+      idValue = int.tryParse(id!) ?? id;
+    } else {
+      idValue = null;
+    }
+    
     return {
-      'id': id != null ? int.tryParse(id!) : null,
-      'cliente_id': int.tryParse(cliente), // Asumiendo que cliente es el ID como string
-      'cliente_nombre': cliente, // Guardamos el nombre del cliente
+      'id': idValue,
+      'cliente_id': int.tryParse(cliente) ?? 0, // Valor por defecto 0 si no se puede convertir
+      'cliente_nombre': cliente,
       'cliente_telefono': telefono ?? '',
       'titulo': titulo,
       'descripcion': descripcion,
@@ -64,7 +72,10 @@ class Pedido {
       'precio': precio,
       'hecho': hecho ? 1 : 0,
       'fecha_hecho': fechaHecho?.toIso8601String(),
-    };
+      // Añadimos campos adicionales que podrían ser necesarios para la sincronización
+      'createdAt': DateTime.now().toIso8601String(),
+      'updatedAt': DateTime.now().toIso8601String(),
+    }..removeWhere((key, value) => value == null); // Eliminamos campos nulos
   }
 
   Pedido copyWith({
