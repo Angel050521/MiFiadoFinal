@@ -274,7 +274,7 @@ class _PedidosScreenState extends State<PedidosScreen> {
               Expanded(
                 flex: 2,
                 child: Text(
-                  p.cliente,
+                  p.clienteNombre ?? 'Sin nombre',
                   style: const TextStyle(
                     color: Colors.white70,
                     fontSize: 14,
@@ -515,8 +515,8 @@ String _labelFecha(DateTime? fecha) {
     // Filtrar pedidos por cliente o teléfono
     final filtro = _busqueda.toLowerCase();
     final filtrados = _pedidos.where((p) {
-      final matchCliente = p.cliente.toLowerCase().contains(filtro);
-      final matchTelefono = (p.telefono ?? '').toLowerCase().contains(filtro);
+      final matchCliente = (p.clienteNombre ?? '').toLowerCase().contains(filtro);
+      final matchTelefono = (p.clienteTelefono ?? '').toLowerCase().contains(filtro);
       return matchCliente || matchTelefono;
     }).toList();
     final pendientes = filtrados.where((p) => !p.hecho).toList();

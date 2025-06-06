@@ -29,8 +29,8 @@ class _PedidoFormScreenState extends State<PedidoFormScreen> {
   void initState() {
     super.initState();
     final p = widget.pedido;
-    _clienteCtrl  = TextEditingController(text: p?.cliente ?? '');
-    _telefonoCtrl = TextEditingController(text: p?.telefono ?? '');  // inicializa teléfono
+    _clienteCtrl  = TextEditingController(text: p?.clienteNombre ?? '');
+    _telefonoCtrl = TextEditingController(text: p?.clienteTelefono ?? '');  // inicializa teléfono
     _tituloCtrl   = TextEditingController(text: p?.titulo ?? '');
     _descCtrl     = TextEditingController(text: p?.descripcion ?? '');
     _precioCtrl   = TextEditingController(
@@ -116,10 +116,10 @@ class _PedidoFormScreenState extends State<PedidoFormScreen> {
 
     final nuevo = Pedido(
       id: widget.pedido?.id,
-      cliente: _clienteCtrl.text.trim(),
-      telefono: _telefonoCtrl.text.trim().isEmpty
+      clienteNombre: _clienteCtrl.text.trim(),
+      clienteTelefono: _telefonoCtrl.text.trim().isEmpty
           ? null
-          : _telefonoCtrl.text.trim(),          // 3) incluye teléfono
+          : _telefonoCtrl.text.trim(),
       titulo: _tituloCtrl.text.trim(),
       descripcion: _descCtrl.text.trim(),
       fechaEntrega: fechaFinal,
@@ -137,8 +137,8 @@ class _PedidoFormScreenState extends State<PedidoFormScreen> {
       // Crear una nueva instancia con el ID asignado
       pedidoGuardado = Pedido(
         id: id.toString(),
-        cliente: nuevo.cliente,
-        telefono: nuevo.telefono,
+        clienteNombre: _clienteCtrl.text.trim(),
+        clienteTelefono: _telefonoCtrl.text.trim(),
         titulo: nuevo.titulo,
         descripcion: nuevo.descripcion,
         fechaEntrega: nuevo.fechaEntrega,

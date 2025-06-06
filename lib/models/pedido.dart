@@ -1,7 +1,8 @@
 class Pedido {
   final String? id;
-  final String cliente;
-  final String? telefono;
+  final int? clienteId;
+  final String? clienteNombre;
+  final String? clienteTelefono;
   final String titulo;
   final String descripcion;
   final DateTime? fechaEntrega;
@@ -11,8 +12,9 @@ class Pedido {
 
   Pedido({
     this.id,
-    required this.cliente,
-    this.telefono,
+    this.clienteId,
+    this.clienteNombre,
+    this.clienteTelefono,
     required this.titulo,
     required this.descripcion,
     this.fechaEntrega,
@@ -22,11 +24,6 @@ class Pedido {
   });
 
   factory Pedido.fromMap(Map<String, Object?> m) {
-    // Handle both snake_case and camelCase field names from database
-    final cliente = m['cliente'] as String? ?? m['cliente_nombre'] as String? ?? '';
-    final telefono = m['telefono'] as String? ?? m['cliente_telefono'] as String?;
-    
-    // For date fields, try both formats and handle potential parsing errors
     DateTime? parseDate(dynamic dateValue) {
       if (dateValue == null) return null;
       try {
@@ -38,11 +35,21 @@ class Pedido {
         return null;
       }
     }
-    
+
+    // Soporta snake_case y camelCase
+    final clienteId = m['cliente_id'] as int? ??
+        int.tryParse(m['cliente_id']?.toString() ?? '') ??
+        m['clienteId'] as int?;
+    final clienteNombre = m['cliente_nombre'] as String? ?? m['clienteNombre'] as String?;
+    final clienteTelefono = m['cliente_telefono'] as String? ?? m['clienteTelefono'] as String?;
+
+    print('DEBUG Pedido.fromMap: $m');
+
     return Pedido(
       id: m['id']?.toString(),
-      cliente: cliente,
-      telefono: telefono,
+      clienteId: clienteId,
+      clienteNombre: clienteNombre,
+      clienteTelefono: clienteTelefono,
       titulo: m['titulo'] as String? ?? '',
       descripcion: m['descripcion'] as String? ?? '',
       fechaEntrega: parseDate(m['fechaEntrega'] ?? m['fecha_entrega']),
@@ -53,35 +60,28 @@ class Pedido {
   }
 
   Map<String, dynamic> toMap() {
-    // Si el ID es numérico, lo convertimos a int, de lo contrario lo dejamos como string
-    final dynamic idValue;
-    if (id != null) {
-      idValue = int.tryParse(id!) ?? id;
-    } else {
-      idValue = null;
-    }
-    
+    final dynamic idValue = id != null ? int.tryParse(id!) ?? id : null;
     return {
       'id': idValue,
-      'cliente_id': int.tryParse(cliente) ?? 0, // Valor por defecto 0 si no se puede convertir
-      'cliente_nombre': cliente,
-      'cliente_telefono': telefono ?? '',
+      'cliente_id': clienteId,
+      'cliente_nombre': clienteNombre,
+      'cliente_telefono': clienteTelefono,
       'titulo': titulo,
       'descripcion': descripcion,
       'fecha_entrega': fechaEntrega?.toIso8601String(),
       'precio': precio,
       'hecho': hecho ? 1 : 0,
       'fecha_hecho': fechaHecho?.toIso8601String(),
-      // Añadimos campos adicionales que podrían ser necesarios para la sincronización
       'createdAt': DateTime.now().toIso8601String(),
       'updatedAt': DateTime.now().toIso8601String(),
-    }..removeWhere((key, value) => value == null); // Eliminamos campos nulos
+    }..removeWhere((key, value) => value == null);
   }
 
   Pedido copyWith({
     String? id,
-    String? cliente,
-    String? telefono,
+    int? clienteId,
+    String? clienteNombre,
+    String? clienteTelefono,
     String? titulo,
     String? descripcion,
     DateTime? fechaEntrega,
@@ -91,8 +91,9 @@ class Pedido {
   }) {
     return Pedido(
       id: id ?? this.id,
-      cliente: cliente ?? this.cliente,
-      telefono: telefono ?? this.telefono,
+      clienteId: clienteId ?? this.clienteId,
+      clienteNombre: clienteNombre ?? this.clienteNombre,
+      clienteTelefono: clienteTelefono ?? this.clienteTelefono,
       titulo: titulo ?? this.titulo,
       descripcion: descripcion ?? this.descripcion,
       fechaEntrega: fechaEntrega ?? this.fechaEntrega,
@@ -105,7 +106,9 @@ class Pedido {
 
   factory Pedido.fromFirestore(Map<String, dynamic> data, String id) => Pedido(
     id: id,
-    cliente: data['cliente'] as String,
+    clienteId: data['cliente_id'] as int? ?? 0,
+    clienteNombre: data['cliente_nombre'] as String,
+    clienteTelefono: data['cliente_telefono'] as String?,
     titulo: data['titulo'] as String,
     descripcion: data['descripcion'] as String,
     fechaEntrega: data['fechaEntrega']?.toDate(),

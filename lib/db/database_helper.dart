@@ -849,7 +849,7 @@ await db.execute('''
   Future<int> insertPedido(Pedido pedido) async {
     try {
       print('🔄 [PEDIDO] Iniciando inserción de pedido');
-      print('   - Cliente: ${pedido.cliente}');
+      print('   - Cliente: ${pedido.clienteNombre}');
       print('   - Título: ${pedido.titulo}');
       print('   - Fecha entrega: ${pedido.fechaEntrega}');
       print('   - Precio: ${pedido.precio}');

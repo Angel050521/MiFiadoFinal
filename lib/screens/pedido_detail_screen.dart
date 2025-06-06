@@ -29,9 +29,9 @@ class PedidoDetailScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildField('Cliente', pedido.cliente),
+            _buildField('Cliente', pedido.clienteNombre ?? ''),
             const SizedBox(height: 16),
-            _buildField('Numero de cliente', pedido.telefono ?? ''),
+            _buildField('Numero de cliente', pedido.clienteTelefono ?? ''),
             const SizedBox(height: 16),
             _buildField('Título', pedido.titulo),
             const SizedBox(height: 16),
