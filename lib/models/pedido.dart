@@ -36,25 +36,47 @@ class Pedido {
       }
     }
 
-    // Soporta snake_case y camelCase
-    final clienteId = m['cliente_id'] as int? ??
-        int.tryParse(m['cliente_id']?.toString() ?? '') ??
-        m['clienteId'] as int?;
+    // Soporta snake_case y camelCase y parsea numéricos robustamente
+    int? parseInt(dynamic v) {
+      if (v == null) return null;
+      if (v is int) return v;
+      if (v is String) return int.tryParse(v);
+      return null;
+    }
+    double? parseDouble(dynamic v) {
+      if (v == null) return null;
+      if (v is double) return v;
+      if (v is int) return v.toDouble();
+      if (v is String) return double.tryParse(v);
+      return null;
+    }
+    bool parseBool(dynamic v) {
+      if (v == null) return false;
+      if (v is bool) return v;
+      if (v is int) return v == 1;
+      if (v is String) return v == '1' || v.toLowerCase() == 'true';
+      return false;
+    }
+
+    final clienteId = parseInt(m['cliente_id'] ?? m['clienteId']);
     final clienteNombre = m['cliente_nombre'] as String? ?? m['clienteNombre'] as String?;
     final clienteTelefono = m['cliente_telefono'] as String? ?? m['clienteTelefono'] as String?;
+    final id = parseInt(m['id']);
+    final precio = parseDouble(m['precio']);
+    final hecho = parseBool(m['hecho']);
 
     print('DEBUG Pedido.fromMap: $m');
 
     return Pedido(
-      id: m['id']?.toString(),
+      id: id?.toString(),
       clienteId: clienteId,
       clienteNombre: clienteNombre,
       clienteTelefono: clienteTelefono,
       titulo: m['titulo'] as String? ?? '',
       descripcion: m['descripcion'] as String? ?? '',
       fechaEntrega: parseDate(m['fechaEntrega'] ?? m['fecha_entrega']),
-      precio: (m['precio'] as num?)?.toDouble(),
-      hecho: (m['hecho'] is int ? (m['hecho'] as int) == 1 : (m['hecho'] as bool?) ?? false),
+      precio: precio,
+      hecho: hecho,
       fechaHecho: parseDate(m['fechaHecho'] ?? m['fecha_hecho']),
     );
   }

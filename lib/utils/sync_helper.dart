@@ -652,6 +652,7 @@ class SyncHelper {
       int clientesRestaurados = 0;
       int productosRestaurados = 0;
       int movimientosRestaurados = 0;
+      int gastosRestaurados = 0;
 
       // Procesar clientes
       if (data['clientes'] is List) {

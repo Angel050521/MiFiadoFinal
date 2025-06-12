@@ -529,16 +529,19 @@ class NubeService {
           final clientes = cleanedData['clientes'] is List ? cleanedData['clientes'] : [];
           final productos = cleanedData['productos'] is List ? cleanedData['productos'] : [];
           final movimientos = cleanedData['movimientos'] is List ? cleanedData['movimientos'] : [];
-          
+          final pedidos = cleanedData['pedidos'] is List ? cleanedData['pedidos'] : [];
+          final gastos = cleanedData['gastos'] is List ? cleanedData['gastos'] : [];
           print('✅ [DEBUG] Datos procesados correctamente:');
           print('  - Clientes: ${clientes.length}');
           print('  - Productos: ${productos.length}');
           print('  - Movimientos: ${movimientos.length}');
-          
+          print('  - Pedidos: ${pedidos.length}');
+          print('  - Gastos: ${gastos.length}');
           if (clientes.isNotEmpty) print('    - Primer cliente: ${clientes.first}');
           if (productos.isNotEmpty) print('    - Primer producto: ${productos.first}');
           if (movimientos.isNotEmpty) print('    - Primer movimiento: ${movimientos.first}');
-                
+          if (pedidos.isNotEmpty) print('    - Primer pedido: ${pedidos.first}');
+          if (gastos.isNotEmpty) print('    - Primer gasto: ${gastos.first}');
           return {
             'success': true,
             'statusCode': response.statusCode,
@@ -546,6 +549,8 @@ class NubeService {
               'clientes': clientes,
               'productos': productos,
               'movimientos': movimientos,
+              'pedidos': pedidos,
+              'gastos': gastos,
             }
           };
         } catch (e, stackTrace) {
@@ -715,6 +720,44 @@ class NubeService {
       final error = 'Error inesperado en actualizarDevice: $e\n$stackTrace';
       print('❌ $error');
       return {'success': false, 'error': 'Error al actualizar dispositivo: ${e.toString()}'};
+    }
+  }
+
+  /// Descarga solo pedidos y gastos desde la nube usando /api/sync
+  static Future<Map<String, dynamic>> descargarPedidosYGastosDesdeNube({
+    required String userId,
+    required String token,
+  }) async {
+    try {
+      final url = Uri.parse('$baseUrl/api/sync?userId=$userId');
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 30));
+
+      final responseBody = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && responseBody['success'] == true) {
+        final data = responseBody['data'] ?? {};
+        return {
+          'success': true,
+          'pedidos': data['pedidos'] ?? [],
+          'gastos': data['gastos'] ?? [],
+        };
+      } else {
+        return {
+          'success': false,
+          'error': responseBody['error'] ?? 'Error al descargar pedidos y gastos',
+        };
+      }
+    } catch (e) {
+      print('❌ [NubeService] Error en descargarPedidosYGastosDesdeNube: $e');
+      return {
+        'success': false,
+        'error': e.toString(),
+      };
     }
   }
 

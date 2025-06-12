@@ -469,28 +469,44 @@ String _labelFecha(DateTime? fecha) {
                 }
 
                 // Llama a tu servicio para obtener los pedidos de la nube
-                final resultado = await NubeService.obtenerPedidosDesdeNube(
+                final resultado = await NubeService.descargarPedidosYGastosDesdeNube(
                   userId: userId,
                   token: token,
                 );
 
                 if (resultado['success'] == true) {
-                  // Borra todos los pedidos locales antes de restaurar
+                  // Borra todos los pedidos y gastos locales antes de restaurar
                   await _db.eliminarTodosLosPedidos();
+                  await _db.eliminarTodosLosGastos();
 
                   final List<dynamic> pedidosRemotos = resultado['pedidos'] ?? [];
+                  int pedidosRestaurados = 0;
                   for (var pedidoData in pedidosRemotos) {
                     try {
                       final pedido = Pedido.fromMap(pedidoData);
                       await _db.insertOrUpdatePedido(pedido);
+                      pedidosRestaurados++;
                     } catch (e) {
                       print('❌ Error al guardar pedido localmente: $e');
                     }
                   }
+
+                  final List<dynamic> gastosRemotos = resultado['gastos'] ?? [];
+                  int gastosRestaurados = 0;
+                  for (var gastoData in gastosRemotos) {
+                    try {
+                      final gasto = Gasto.fromMap(gastoData);
+                      await _db.insertGasto(gasto);
+                      gastosRestaurados++;
+                    } catch (e) {
+                      print('❌ Error al guardar gasto localmente: $e');
+                    }
+                  }
+
                   await _cargarPedidos();
-                  _mostrarSnackBar('✅ Pedidos restaurados desde la nube');
+                  _mostrarSnackBar('✅ Restaurados $pedidosRestaurados pedidos y $gastosRestaurados gastos desde la nube');
                 } else {
-                  _mostrarSnackBar('❌ ${resultado['error'] ?? 'Error al restaurar pedidos'}');
+                  _mostrarSnackBar('❌ ${resultado['error'] ?? 'Error al restaurar pedidos y gastos'}');
                 }
               } catch (e) {
                 print('❌ Error en _descargarPedidosDeNube: $e');

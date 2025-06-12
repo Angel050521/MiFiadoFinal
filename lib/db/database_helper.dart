@@ -955,6 +955,12 @@ await db.execute('''
   }
 
   // --------- MÉTODOS GASTOS ---------
+  /// Elimina todos los gastos locales
+  Future<void> eliminarTodosLosGastos() async {
+    final db = await instance.database;
+    await db.delete('gastos');
+  }
+
   Future<int> insertGasto(Gasto gasto) async {
     final db = await instance.database;
     return await db.insert('gastos', gasto.toMap());
