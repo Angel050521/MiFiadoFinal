@@ -116,6 +116,8 @@ class SyncHelper {
         List<Map<String, dynamic>> productosJson = [];
         List<Map<String, dynamic>> movimientosJson = [];
         List<Map<String, dynamic>> pedidosJson = [];
+        final gastos = await db.getGastos();
+        List<Map<String, dynamic>> gastosJson = gastos.map((g) => g.toMap()).toList();
 
         print('📊 [DEBUG] Procesando ${clientes.length} clientes...');
         // Obtener todos los productos y movimientos
@@ -207,6 +209,8 @@ class SyncHelper {
         print('   - Clientes: ${clientes.length}');
         print('   - Productos: ${productosJson.length}');
         print('   - Movimientos: ${movimientosJson.length}');
+        print('   - Pedidos: ${pedidosJson.length}');
+        print('   - Gastos: ${gastosJson.length}');
         print('   - Eliminados:');
         print('     - Clientes: $clientesEliminados');
         print('     - Productos: $productosEliminados');
@@ -245,6 +249,7 @@ class SyncHelper {
           productos: productosJson,
           movimientos: movimientosJson,
           pedidos: pedidosJson,
+          gastos: gastosJson,
           deleted: deletedMap,
         );
         
@@ -319,6 +324,7 @@ class SyncHelper {
     required List<Map<String, dynamic>> movimientos,
     required Map<String, dynamic> deleted,
     required List<Map<String, dynamic>> pedidos,
+    required List<Map<String, dynamic>> gastos,
   }) async {
     try {
       // Tamaño de lote para cada tipo de dato
@@ -429,6 +435,28 @@ class SyncHelper {
         await Future.delayed(const Duration(milliseconds: 500));
       }
       
+      // Enviar gastos en lotes
+      for (var i = 0; i < gastos.length; i += batchSize) {
+        final batch = gastos.sublist(
+          i,
+          i + batchSize > gastos.length ? gastos.length : i + batchSize,
+        );
+        print('💸 Enviando lote de gastos [33m[1m${i ~/ batchSize + 1}[0m ([32m${batch.length}[0m registros)');
+        final response = await NubeService.sincronizarConNube(
+          userId: userId,
+          token: token,
+          clientes: [],
+          productos: [],
+          movimientos: [],
+          pedidos: [],
+          gastos: batch,
+          deleted: {},
+        );
+        if (response['success'] != true) {
+          return response; // Retornar en caso de error
+        }
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
       // Finalmente, enviar las eliminaciones
       if (deleted.isNotEmpty) {
         print('🗑️ Enviando registros eliminados');

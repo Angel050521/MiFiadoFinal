@@ -168,6 +168,7 @@ class NubeService {
     required List<Map<String, dynamic>> movimientos,
     required Map<String, dynamic> deleted,
     List<Map<String, dynamic>> pedidos = const [],
+    List<Map<String, dynamic>> gastos = const [],
   }) async {
     // Validar token
     if (token.isEmpty) {
@@ -202,6 +203,7 @@ class NubeService {
         'productos': productos,
         'movimientos': movimientos,
         'pedidos': pedidos, // Incluir pedidos en los datos a sincronizar
+        'gastos': gastos, // Incluir gastos en los datos a sincronizar
         'deleted': deleted.isEmpty ? {} : deleted, // Enviar objeto vacío si no hay eliminados
         'timestamp': DateTime.now().toIso8601String(),
       };      
@@ -243,6 +245,7 @@ class NubeService {
         'productos': productos.length,
         'movimientos': movimientos.length,
         'pedidos': pedidos.length,
+        'gastos': gastos.length,
         'deleted': deleted.map((k, v) => MapEntry(k, v is List ? v.length : v)),
       }}');
 

@@ -244,33 +244,31 @@ async function handleSyncData(request, db) {
 
 
     if (data.gastos && data.gastos.length > 0) {
-  console.log(`🔄 Sincronizando ${data.gastos.length} gastos`);
-  
-  for (const gasto of data.gastos) {
-    try {
-      await db.prepare(`
-        INSERT INTO gastos (id, concepto, monto, fecha, userId)
-        VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET
-          concepto = excluded.concepto,
-          monto = excluded.monto,
-          fecha = excluded.fecha,
-          userId = excluded.userId,
-          updated_at = CURRENT_TIMESTAMP
-      `).bind(
-        gasto.id ? parseInt(gasto.id) : null,
-        gasto.concepto || '',
-        gasto.monto || 0,
-        gasto.fecha || new Date().toISOString(),
-        userId
-      ).run();
-      
-      console.log(`✅ Gasto ${gasto.id} sincronizado correctamente`);
-    } catch (error) {
-      console.error(`❌ Error al sincronizar gasto ${gasto.id}:`, error);
+      console.log(`🔄 Sincronizando ${data.gastos.length} gastos`);
+      for (const gasto of data.gastos) {
+        try {
+          await db.prepare(`
+            INSERT INTO gastos (id, concepto, monto, fecha, userId)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+              concepto = excluded.concepto,
+              monto = excluded.monto,
+              fecha = excluded.fecha,
+              userId = excluded.userId,
+              updatedAt = CURRENT_TIMESTAMP
+          `).bind(
+            gasto.id ? parseInt(gasto.id) : null,
+            gasto.concepto || '',
+            gasto.monto || 0,
+            gasto.fecha || new Date().toISOString(),
+            userId
+          ).run();
+          console.log(`✅ Gasto ${gasto.id} sincronizado correctamente`);
+        } catch (error) {
+          console.error(`❌ Error al sincronizar gasto ${gasto.id}:`, error);
+        }
+      }
     }
-  }
-}
 
     // Sincronizar PRODUCTOS
     for (const producto of productos) {
